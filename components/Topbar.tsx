@@ -21,7 +21,7 @@ const Topbar = () => {
                 <div className="text-xl font-bold">ContrAI</div>
                 <div className="space-x-2">
                     {showHomeButton && (
-                        <Link href="/home" passHref>
+                        <Link href="/" passHref>
                             <Button variant="ghost">
                                 <Home className="mr-2 h-4 w-4" />
                                 Home
