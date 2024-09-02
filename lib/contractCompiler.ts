@@ -3,6 +3,7 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import PDFParser from 'pdf2json';
 import xlsx from 'xlsx';
+
 function getCurrentDate(): string {
     const date = new Date();
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
@@ -43,13 +44,13 @@ async function extractVisuraInfo(filename: string): Promise<Record<string, strin
     ];
 
     return new Promise((resolve, reject) => {
-        const pdfParser = new PDFParser(null, 1);
+        const pdfParser = new PDFParser();
 
-        pdfParser.on("pdfParser_dataError", () => {
-            reject(new Error('PDF parsing failed'));
+        pdfParser.on("pdfParser_dataError", (error) => {
+            reject(new Error('PDF parsing failed: ' + error));
         });
 
-        pdfParser.on("pdfParser_dataReady", () => {
+        pdfParser.on("pdfParser_dataReady", (pdfData) => {
             const text = pdfParser.getRawTextContent();
             const replacements: Record<string, string> = {
                 'data odierna': getCurrentDate()
@@ -70,6 +71,7 @@ async function extractVisuraInfo(filename: string): Promise<Record<string, strin
         pdfParser.loadPDF(filename);
     });
 }
+
 async function extractCreditiInfo(filePath: string): Promise<Record<string, number>> {
     const workbook = xlsx.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
