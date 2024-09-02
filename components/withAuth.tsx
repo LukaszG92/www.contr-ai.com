@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/context/AuthProvider';
 
-export function withAuth<P>(WrappedComponent: React.ComponentType<P>) {
-    return function WithAuth(props: P) {
+export function withAuth<P extends object>(WrappedComponent: React.ComponentType<P>) {
+    return function WithAuth(props: P & JSX.IntrinsicAttributes) {
         const router = useRouter();
         const { isLoggedIn, isLoading } = useAuth();
 
