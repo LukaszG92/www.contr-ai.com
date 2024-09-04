@@ -1,8 +1,13 @@
-import fs from 'fs/promises';
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import PDFParser from 'pdf2json';
 import xlsx from 'xlsx';
+import { Readable } from 'stream';
+
+const s3Client = new S3Client({
+    region: process.env.AWS_REGION || 'us-east-1',
+});
 
 function getCurrentDate(): string {
     const date = new Date();
@@ -30,7 +35,23 @@ function cleanText(text: string): string {
     return text.replace(/\r\n/g, ' ').trim();
 }
 
-async function extractVisuraInfo(filename: string): Promise<Record<string, string>> {
+async function getS3FileContent(bucket: string, key: string): Promise<Buffer> {
+    const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+    const response = await s3Client.send(command);
+    return streamToBuffer(response.Body as Readable);
+}
+
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+        const chunks: any[] = [];
+        stream.on('data', (chunk) => chunks.push(chunk));
+        stream.on('error', reject);
+        stream.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+}
+
+async function extractVisuraInfo(bucket: string, key: string): Promise<Record<string, string>> {
+    const pdfContent = await getS3FileContent(bucket, key);
     const info = [
         'CAPITALE', 'Il QR ', 'Indirizzo Sede legale', 'Domicilio digitale/PEC',
         'Numero REARM - ', 'Codice fiscale e n.iscr. al\r\nRegistro Imprese',
@@ -68,12 +89,13 @@ async function extractVisuraInfo(filename: string): Promise<Record<string, strin
             resolve(replacements);
         });
 
-        pdfParser.loadPDF(filename);
+        pdfParser.parseBuffer(pdfContent);
     });
 }
 
-async function extractCreditiInfo(filePath: string): Promise<Record<string, number>> {
-    const workbook = xlsx.readFile(filePath);
+async function extractCreditiInfo(bucket: string, key: string): Promise<Record<string, number>> {
+    const xlsxContent = await getS3FileContent(bucket, key);
+    const workbook = xlsx.read(xlsxContent, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const sheetData = xlsx.utils.sheet_to_json(worksheet);
@@ -90,12 +112,14 @@ async function extractCreditiInfo(filePath: string): Promise<Record<string, numb
 }
 
 async function replaceTextInDocx(
-    inputPath: string,
-    outputPath: string,
+    inputBucket: string,
+    inputKey: string,
+    outputBucket: string,
+    outputKey: string,
     replacements: Record<string, string | number>
 ): Promise<void> {
     try {
-        const content = await fs.readFile(inputPath, 'binary');
+        const content = await getS3FileContent(inputBucket, inputKey);
         const zip = new PizZip(content);
         const doc = new Docxtemplater(zip, {
             paragraphLoop: true,
@@ -110,8 +134,13 @@ async function replaceTextInDocx(
             compression: 'DEFLATE',
         });
 
-        await fs.writeFile(outputPath, buf);
-        console.log(`Text replaced and saved to ${outputPath}`);
+        await s3Client.send(new PutObjectCommand({
+            Bucket: outputBucket,
+            Key: outputKey,
+            Body: buf,
+        }));
+
+        console.log(`Text replaced and saved to s3://${outputBucket}/${outputKey}`);
     } catch (err) {
         console.error('Error processing the DOCX file:', err);
         throw err;
@@ -119,16 +148,20 @@ async function replaceTextInDocx(
 }
 
 export async function contractCompiler(
-    inputPath: string,
-    outputPath: string,
-    visuraFilename: string,
-    creditiFileName: string
+    inputBucket: string,
+    inputKey: string,
+    outputBucket: string,
+    outputKey: string,
+    visuraBucket: string,
+    visuraKey: string,
+    creditiBucket: string,
+    creditiKey: string
 ): Promise<void> {
     try {
-        const visuraReplacements = await extractVisuraInfo(visuraFilename);
-        const creditiReplacements = await extractCreditiInfo(creditiFileName);
+        const visuraReplacements = await extractVisuraInfo(visuraBucket, visuraKey);
+        const creditiReplacements = await extractCreditiInfo(creditiBucket, creditiKey);
         const replacements = { ...visuraReplacements, ...creditiReplacements };
-        await replaceTextInDocx(inputPath, outputPath, replacements);
+        await replaceTextInDocx(inputBucket, inputKey, outputBucket, outputKey, replacements);
     } catch (error) {
         console.error('Error compiling contract:', error);
         throw error;
