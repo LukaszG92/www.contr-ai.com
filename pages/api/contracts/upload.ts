@@ -1,13 +1,20 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
-import fs from 'fs/promises';
-import path from 'path';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 export const config = {
     api: {
         bodyParser: false,
     },
 };
+
+const s3Client = new S3Client({
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+});
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
@@ -25,16 +32,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'Nessun file caricato o nome utente mancante.' });
         }
 
-        const userDir = path.join(process.cwd(), 'uploads', username);
-        await fs.mkdir(userDir, { recursive: true });
-
         const timestamp = Date.now();
         const originalFilename = file.originalFilename || 'unnamed';
-        const newFileName = `${timestamp}-${originalFilename}`;
+        const newFileName = `${username}/${timestamp}-${originalFilename}`;
 
-        const newFilePath = path.join(userDir, newFileName);
-        await fs.copyFile(file.filepath, newFilePath);
-        await fs.unlink(file.filepath);
+        const fileContent = await fs.readFile(file.filepath);
+
+        const uploadParams = {
+            Bucket: process.env.AWS_S3_BUCKET_NAME,
+            Key: newFileName,
+            Body: fileContent,
+        };
+
+        await s3Client.send(new PutObjectCommand(uploadParams));
 
         res.status(200).json({ message: 'File caricato con successo!', fileName: newFileName });
     } catch (error) {
