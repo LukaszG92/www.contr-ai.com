@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import fs from 'fs/promises';
 
 export const config = {
     api: {
@@ -34,17 +35,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const timestamp = Date.now();
         const originalFilename = file.originalFilename || 'unnamed';
-        const newFileName = `${username}/${timestamp}-${originalFilename}`;
+        const newFileName = `${timestamp}-${originalFilename}`;
 
         const fileContent = await fs.readFile(file.filepath);
 
         const uploadParams = {
-            Bucket: process.env.AWS_S3_BUCKET_NAME,
-            Key: newFileName,
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: `${username}/${newFileName}`,
             Body: fileContent,
         };
 
         await s3Client.send(new PutObjectCommand(uploadParams));
+        await fs.unlink(file.filepath);
 
         res.status(200).json({ message: 'File caricato con successo!', fileName: newFileName });
     } catch (error) {

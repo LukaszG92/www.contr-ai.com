@@ -1,8 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm, Fields, Files, File } from 'formidable';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import fs from 'fs';
+import fsPromises from 'fs/promises';
+import path from 'path';
 import archiver from 'archiver';
+import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Readable } from 'stream';
 import { contractCompiler } from '@/lib/contractCompiler';
 
@@ -14,12 +17,15 @@ export const config = {
 
 const s3Client = new S3Client({
     region: process.env.AWS_REGION,
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
+    credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+        ? {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        }
+        : undefined,
 });
 
+// Helper functions
 const trimExtension = (contractName: string): string => {
     const suffix = '.docx';
     return contractName.endsWith(suffix) ? contractName.slice(0, -suffix.length) : contractName;
@@ -34,6 +40,13 @@ const getSafeFilename = (file: File | File[] | undefined): string => {
         return file[0]?.originalFilename || 'unnamed_file';
     }
     return file?.originalFilename || 'unnamed_file';
+};
+
+const getSafeFilepath = (file: File | File[] | undefined): string => {
+    if (Array.isArray(file)) {
+        return file[0]?.filepath || '';
+    }
+    return file?.filepath || '';
 };
 
 const ensureString = (value: unknown): string => {
@@ -69,81 +82,106 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'I file Visura e Crediti sono richiesti.' });
         }
 
-        // Upload visura and crediti files to S3
-        const visuraKey = `${username}/visura-${Date.now()}.docx`;
-        const creditiKey = `${username}/crediti-${Date.now()}.docx`;
+        const userDir = path.join(process.cwd(), 'tmp', username);
+        await fsPromises.mkdir(userDir, { recursive: true });
 
-        await s3Client.send(new PutObjectCommand({
-            Bucket: process.env.AWS_S3_BUCKET_NAME,
-            Key: visuraKey,
-            Body: await (visuraFile as File).arrayBuffer(),
-        }));
+        const newVisuraPath = path.join(userDir, getSafeFilename(visuraFile));
+        const newCreditiPath = path.join(userDir, getSafeFilename(creditiFile));
 
-        await s3Client.send(new PutObjectCommand({
-            Bucket: process.env.AWS_S3_BUCKET_NAME,
-            Key: creditiKey,
-            Body: await (creditiFile as File).arrayBuffer(),
-        }));
+        const visuraFilepath = getSafeFilepath(visuraFile);
+        const creditiFilepath = getSafeFilepath(creditiFile);
 
-        // List user's contracts
-        const listObjectsResponse = await s3Client.send(new ListObjectsV2Command({
-            Bucket: process.env.AWS_S3_BUCKET_NAME,
-            Prefix: `${username}/`,
-        }));
-
-        const fileList = listObjectsResponse.Contents || [];
-
-        // Create a writable stream for the zip file
-        const archive = archiver('zip', { zlib: { level: 9 } });
-        const chunks: any[] = [];
-
-        archive.on('data', (chunk) => chunks.push(chunk));
-        archive.on('end', () => {
-            const zipBuffer = Buffer.concat(chunks);
-            res.setHeader('Content-Type', 'application/zip');
-            res.setHeader('Content-Disposition', `attachment; filename=${username}_contracts_${Date.now()}.zip`);
-            res.status(200).send(zipBuffer);
-        });
-
-        for (const file of fileList) {
-            if (file.Key && file.Key.endsWith('.docx') && !file.Key.includes('Compilato')) {
-                const getObjectCommand = new GetObjectCommand({
-                    Bucket: process.env.AWS_S3_BUCKET_NAME,
-                    Key: file.Key,
-                });
-
-                const { Body } = await s3Client.send(getObjectCommand);
-
-                if (Body instanceof Readable) {
-                    const contractBuffer = await new Promise<Buffer>((resolve) => {
-                        const chunks: any[] = [];
-                        Body.on('data', (chunk) => chunks.push(chunk));
-                        Body.on('end', () => resolve(Buffer.concat(chunks)));
-                    });
-
-                    const compiledBuffer = await contractCompiler(
-                        contractBuffer,
-                        await s3Client.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET_NAME, Key: visuraKey })).Body,
-                        await s3Client.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET_NAME, Key: creditiKey })).Body
-                    );
-
-                    const compiledKey = `${username}/${trimExtension(file.Key)}Compilato.docx`;
-                    await s3Client.send(new PutObjectCommand({
-                        Bucket: process.env.AWS_S3_BUCKET_NAME,
-                        Key: compiledKey,
-                        Body: compiledBuffer,
-                    }));
-
-                    archive.append(compiledBuffer, { name: getFilename(compiledKey) });
-                }
-            }
+        if (visuraFilepath && creditiFilepath) {
+            await fsPromises.copyFile(visuraFilepath, newVisuraPath);
+            await fsPromises.copyFile(creditiFilepath, newCreditiPath);
+            await fsPromises.unlink(visuraFilepath);
+            await fsPromises.unlink(creditiFilepath);
+        } else {
+            throw new Error('Invalid file paths');
         }
 
-        archive.finalize();
+        const customReplacements: Record<string, Record<string, string>> = {};
+        Object.entries(fields).forEach(([key, value]) => {
+            const match = key.match(/customReplacement\[(\d+)]\[(\w+)]/);
+            if (match) {
+                const [, index, field] = match;
+                if (!customReplacements[index]) customReplacements[index] = {};
+                customReplacements[index][field] = ensureString(value);
+            }
+        });
 
-        // Clean up temporary files in S3
-        await s3Client.send(new DeleteObjectCommand({ Bucket: process.env.AWS_S3_BUCKET_NAME, Key: visuraKey }));
-        await s3Client.send(new DeleteObjectCommand({ Bucket: process.env.AWS_S3_BUCKET_NAME, Key: creditiKey }));
+        const zipFileName = `${username}_contracts_${Date.now()}.zip`;
+        const zipFilePath = path.join(userDir, zipFileName);
+        const output = fs.createWriteStream(zipFilePath);
+        const archive = archiver('zip', {
+            zlib: { level: 9 }
+        });
+
+        archive.pipe(output);
+
+        const listParams = {
+            Bucket: process.env.S3_BUCKET_NAME,
+            Prefix: `${username}/`,
+        };
+
+        const listResult = await s3Client.send(new ListObjectsV2Command(listParams));
+        const fileList = listResult.Contents?.map(object => object.Key!) ?? [];
+        const tmpFiles: string[] = [];
+
+        for (const file of fileList) {
+            const getParams = {
+                Bucket: process.env.S3_BUCKET_NAME,
+                Key: file,
+            };
+
+            const { Body } = await s3Client.send(new GetObjectCommand(getParams));
+            const compileFilePath = path.join(userDir, path.basename(file));
+            await new Promise((resolve, reject) => {
+                const writeStream = fs.createWriteStream(compileFilePath);
+                (Body as Readable).pipe(writeStream);
+                writeStream.on('finish', resolve);
+                writeStream.on('error', reject);
+            });
+
+            const outputFilePath = path.join(userDir, `${trimExtension(path.basename(file))}Compilato.docx`);
+            await contractCompiler(compileFilePath, outputFilePath, newVisuraPath, newCreditiPath);
+            archive.file(outputFilePath, { name: getFilename(outputFilePath) });
+            tmpFiles.push(outputFilePath);
+            tmpFiles.push(compileFilePath);
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            output.on('close', resolve);
+            archive.on('error', reject);
+            archive.finalize();
+        });
+
+        const zipFileContent = await fsPromises.readFile(zipFilePath);
+
+        // Upload the zip file to S3
+        const uploadParams = {
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: `${username}/${zipFileName}`,
+            Body: zipFileContent,
+        };
+
+        await s3Client.send(new PutObjectCommand(uploadParams));
+
+        // Generate a pre-signed URL for downloading the zip file
+        const url = await getSignedUrl(s3Client, new GetObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: `${username}/${zipFileName}`,
+        }), { expiresIn: 3600 }); // URL expires in 1 hour
+
+        res.status(200).json({ url });
+
+        // Clean up temporary files
+        await Promise.all([
+            fsPromises.unlink(zipFilePath),
+            fsPromises.unlink(newVisuraPath),
+            fsPromises.unlink(newCreditiPath),
+            ...tmpFiles.map(file => fsPromises.unlink(file))
+        ]);
 
     } catch (error) {
         console.error('Errore nella compilazione dei contratti:', error);

@@ -24,21 +24,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        const listCommand = new ListObjectsV2Command({
-            Bucket: process.env.AWS_S3_BUCKET_NAME,
+        const listParams = {
+            Bucket: process.env.S3_BUCKET_NAME,
             Prefix: `${username}/`,
-            Delimiter: '/'
-        });
+        };
 
-        const listResponse = await s3Client.send(listCommand);
-
-        // Filter out directory markers and extract just the filenames
-        const contracts = listResponse.Contents
-            ?.filter(item => item.Key !== `${username}/`)
-            .map(item => item.Key?.split('/').pop())
-            .filter(Boolean) || [];
-
-        console.log(`Contracts for ${username}:`, contracts);
+        const data = await s3Client.send(new ListObjectsV2Command(listParams));
+        const contracts = data.Contents?.map(object => object.Key?.split('/').pop()) ?? [];
 
         res.status(200).json({
             status: "success",
