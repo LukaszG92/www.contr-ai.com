@@ -1,13 +1,13 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm, Fields, Files, File } from 'formidable';
-import archiver from 'archiver';
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Readable } from 'stream';
-import { contractCompiler } from '@/lib/contractCompiler';
-import { PassThrough } from 'stream';
 import path from "path";
 import fs from "fs/promises";
+import { contractCompiler } from '@/lib/contractCompiler';
+import archiver from 'archiver';
+import { PassThrough } from 'stream';
 
 export const config = {
     api: {
@@ -25,7 +25,6 @@ const s3Client = new S3Client({
         : undefined,
 });
 
-// Helper functions
 const trimExtension = (contractName: string): string => {
     const suffix = '.docx';
     return contractName.endsWith(suffix) ? contractName.slice(0, -suffix.length) : contractName;
@@ -48,6 +47,15 @@ const ensureString = (value: unknown): string => {
     return '';
 };
 
+async function uploadFileToS3(bucket: string, key: string, filepath: string): Promise<void> {
+    const fileContent = await fs.readFile(filepath);
+    await s3Client.send(new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: fileContent,
+    }));
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -67,12 +75,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
 
         const username = ensureString(fields.username);
-        const percentuale = ensureString(fields.percentuale);
         const visuraFile = files.visura;
         const creditiFile = files.crediti;
 
         if (!visuraFile || !creditiFile) {
-            return res.status(400).json({ error: 'I file Visura e Crediti sono richiesti.' });
+            return res.status(400).json({ error: 'Visura and Crediti files are required.' });
         }
 
         // Upload Visura and Crediti files to S3
@@ -83,16 +90,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             uploadFileToS3(process.env.S3_BUCKET_NAME, visuraKey, getSafeFilepath(visuraFile)),
             uploadFileToS3(process.env.S3_BUCKET_NAME, creditiKey, getSafeFilepath(creditiFile)),
         ]);
-
-        const customReplacements: Record<string, Record<string, string>> = {};
-        Object.entries(fields).forEach(([key, value]) => {
-            const match = key.match(/customReplacement\[(\d+)]\[(\w+)]/);
-            if (match) {
-                const [, index, field] = match;
-                if (!customReplacements[index]) customReplacements[index] = {};
-                customReplacements[index][field] = ensureString(value);
-            }
-        });
 
         const zipFileName = `${username}_contracts_${Date.now()}.zip`;
         const archive = archiver('zip', { zlib: { level: 9 } });
@@ -109,7 +106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const fileList = listResult.Contents?.filter(object => object.Key?.endsWith('.docx')).map(object => object.Key!) ?? [];
 
         for (const file of fileList) {
-            const outputKey = `${username}/${trimExtension(file)}Compilato.docx`;
+            const outputKey = `${username}/${trimExtension(path.basename(file))}Compilato.docx`;
 
             await contractCompiler(
                 process.env.S3_BUCKET_NAME,
@@ -122,7 +119,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 creditiKey
             );
 
-            const {Body} = await s3Client.send(new GetObjectCommand({
+            const { Body } = await s3Client.send(new GetObjectCommand({
                 Bucket: process.env.S3_BUCKET_NAME,
                 Key: outputKey,
             }));
@@ -130,7 +127,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             if (Body instanceof Readable) {
                 const fileName = path.basename(outputKey);
                 if (fileName) {
-                    archive.append(Body, {name: fileName});
+                    archive.append(Body, { name: fileName });
                 } else {
                     console.warn(`Unable to determine file name for ${outputKey}, skipping this file`);
                 }
@@ -139,19 +136,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
         }
 
-        archive.finalize();
+        await archive.finalize();
 
         // Upload the zip file to S3
-        await new Promise<void>((resolve, reject) => {
-            s3Client.send(new PutObjectCommand({
-                Bucket: process.env.S3_BUCKET_NAME,
-                Key: `${username}/${zipFileName}`,
-                Body: passThrough,
-            }), (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        await s3Client.send(new PutObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: `${username}/${zipFileName}`,
+            Body: passThrough,
+        }));
 
         // Generate a pre-signed URL for downloading the zip file
         const url = await getSignedUrl(s3Client, new GetObjectCommand({
@@ -166,21 +158,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             s3Client.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: visuraKey })),
             s3Client.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: creditiKey })),
             ...fileList.map(file =>
-                s3Client.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: `${username}/${trimExtension(file)}Compilato.docx` }))
+                s3Client.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: `${username}/${trimExtension(path.basename(file))}Compilato.docx` }))
             )
         ]);
 
     } catch (error) {
-        console.error('Errore nella compilazione dei contratti:', error);
-        res.status(500).json({ error: 'Si è verificato un errore durante la compilazione del contratto.' });
+        console.error('Error in contract compilation:', error);
+        res.status(500).json({ error: 'An error occurred during contract compilation.' });
     }
-}
-
-async function uploadFileToS3(bucket: string, key: string, filepath: string): Promise<void> {
-    const fileContent = await fs.readFile(filepath);
-    await s3Client.send(new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: fileContent,
-    }));
 }
