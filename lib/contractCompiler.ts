@@ -1,13 +1,8 @@
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import PDFParser from 'pdf2json';
 import xlsx from 'xlsx';
-import { Readable } from 'stream';
 
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION || 'us-east-1',
-});
 
 function getCurrentDate(): string {
     const date = new Date();
@@ -35,25 +30,7 @@ function cleanText(text: string): string {
     return text.replace(/\r\n/g, ' ').trim();
 }
 
-async function getS3FileContent(bucket: string, key: string): Promise<Buffer> {
-    console.log(`Fetching S3 file content: s3://${bucket}/${key}`);
-    const command = new GetObjectCommand({ Bucket: bucket, Key: key });
-    const response = await s3Client.send(command);
-    return streamToBuffer(response.Body as Readable);
-}
-
-async function streamToBuffer(stream: Readable): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-        const chunks: any[] = [];
-        stream.on('data', (chunk) => chunks.push(chunk));
-        stream.on('error', reject);
-        stream.on('end', () => resolve(Buffer.concat(chunks)));
-    });
-}
-
-async function extractVisuraInfo(bucket: string, key: string): Promise<Record<string, string>> {
-    console.log('Extracting Visura info from:', key);
-    const pdfContent = await getS3FileContent(bucket, key);
+async function extractVisuraInfo(pdfBuffer: Buffer): Promise<Record<string, string>> {
     const info = [
         'CAPITALE', 'Il QR ', 'Indirizzo Sede legale', 'Domicilio digitale/PEC',
         'Numero REARM - ', 'Codice fiscale e n.iscr. al\r\nRegistro Imprese',
@@ -67,14 +44,13 @@ async function extractVisuraInfo(bucket: string, key: string): Promise<Record<st
     ];
 
     return new Promise((resolve, reject) => {
-        const pdfParser = new PDFParser();
+        const pdfParser = new PDFParser(null, true); // Changed from 1 to true
 
-        pdfParser.on("pdfParser_dataError", (error) => {
-            console.error('PDF parsing failed:', error);
-            reject(new Error('PDF parsing failed: ' + error));
+        pdfParser.on("pdfParser_dataError", (errData) => {
+            reject(new Error('PDF parsing failed: ' + errData.parserError));
         });
 
-        pdfParser.on("pdfParser_dataReady", (pdfData) => {
+        pdfParser.on("pdfParser_dataReady", () => {
             const text = pdfParser.getRawTextContent();
             const replacements: Record<string, string> = {
                 'data odierna': getCurrentDate()
@@ -89,18 +65,15 @@ async function extractVisuraInfo(bucket: string, key: string): Promise<Record<st
                 }
             }
 
-            console.log('Visura info extracted successfully');
             resolve(replacements);
         });
 
-        pdfParser.parseBuffer(pdfContent);
+        pdfParser.parseBuffer(pdfBuffer);
     });
 }
 
-async function extractCreditiInfo(bucket: string, key: string): Promise<Record<string, number>> {
-    console.log('Extracting Crediti info from:', key);
-    const xlsxContent = await getS3FileContent(bucket, key);
-    const workbook = xlsx.read(xlsxContent, { type: 'buffer' });
+function extractCreditiInfo(xlsxBuffer: Buffer): Record<string, number> {
+    const workbook = xlsx.read(xlsxBuffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const sheetData = xlsx.utils.sheet_to_json(worksheet);
@@ -113,69 +86,68 @@ async function extractCreditiInfo(bucket: string, key: string): Promise<Record<s
         }
     });
 
-    console.log('Crediti info extracted successfully');
     return Object.fromEntries(sums);
 }
 
+
 async function replaceTextInDocx(
-    inputBucket: string,
-    inputKey: string,
-    outputBucket: string,
-    outputKey: string,
+    docxBuffer: Buffer,
     replacements: Record<string, string | number>
-): Promise<void> {
-    try {
-        console.log('Replacing text in DOCX:', inputKey);
-        const content = await getS3FileContent(inputBucket, inputKey);
-        const zip = new PizZip(content);
-        const doc = new Docxtemplater(zip, {
-            paragraphLoop: true,
-            linebreaks: true,
-        });
+): Promise<Buffer> {
+    const zip = new PizZip(docxBuffer);
+    const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+    });
 
-        doc.setData(replacements);
-        doc.render();
+    doc.setData(replacements);
+    doc.render();
 
-        const buf = doc.getZip().generate({
-            type: 'nodebuffer',
-            compression: 'DEFLATE',
-        });
-
-        await s3Client.send(new PutObjectCommand({
-            Bucket: outputBucket,
-            Key: outputKey,
-            Body: buf,
-        }));
-
-        console.log(`Text replaced and saved to s3://${outputBucket}/${outputKey}`);
-    } catch (err) {
-        console.error('Error processing the DOCX file:', err);
-        throw err;
-    }
+    return doc.getZip().generate({
+        type: 'nodebuffer',
+        compression: 'DEFLATE',
+    });
 }
 
-export async function contractCompiler(
-    inputBucket: string,
-    inputKey: string,
-    outputBucket: string,
-    outputKey: string,
-    visuraBucket: string,
-    visuraKey: string,
-    creditiBucket: string,
-    creditiKey: string
-): Promise<void> {
+function determineFileType(buffer: Buffer): string {
+    const header = buffer.slice(0, 4).toString('hex');
+    if (header === '504b0304') return 'docx'; // DOCX files start with PK..
+    if (header === '25504446') return 'pdf';  // PDF files start with %PDF
+    if (header === 'd0cf11e0') return 'xlsx'; // Old Excel files
+    if (header === '504b0304') return 'xlsx'; // New Excel files (same as DOCX, need more sophisticated check)
+    throw new Error('Unknown file type');
+}
+
+export interface ProcessingContext {
+    visuraInfo?: Record<string, string>;
+    creditiInfo?: Record<string, number>;
+    docxBuffer?: Buffer;
+}
+
+export async function contractCompiler(fileBuffer: Buffer, context: ProcessingContext = {}): Promise<{ buffer: Buffer; context: ProcessingContext }> {
     try {
-        console.log('Contract compilation started for:', inputKey);
-        console.log('Extracting Visura info');
-        const visuraReplacements = await extractVisuraInfo(visuraBucket, visuraKey);
-        console.log('Extracting Crediti info');
-        const creditiReplacements = await extractCreditiInfo(creditiBucket, creditiKey);
-        const replacements = { ...visuraReplacements, ...creditiReplacements };
-        console.log('Replacements prepared:', Object.keys(replacements).length, 'items');
-        await replaceTextInDocx(inputBucket, inputKey, outputBucket, outputKey, replacements);
-        console.log('Contract compilation completed for:', inputKey);
+        const fileType = determineFileType(fileBuffer);
+
+        switch (fileType) {
+            case 'pdf':
+                context.visuraInfo = await extractVisuraInfo(fileBuffer);
+                return { buffer: fileBuffer, context };
+            case 'xlsx':
+                context.creditiInfo = extractCreditiInfo(fileBuffer);
+                return { buffer: fileBuffer, context };
+            case 'docx':
+                context.docxBuffer = fileBuffer;
+                if (context.visuraInfo && context.creditiInfo) {
+                    const replacements = { ...context.visuraInfo, ...context.creditiInfo };
+                    const processedBuffer = await replaceTextInDocx(fileBuffer, replacements);
+                    return { buffer: processedBuffer, context: {} }; // Clear context after processing
+                }
+                return { buffer: fileBuffer, context }; // Return original if not all info is available
+            default:
+                throw new Error('Unsupported file type');
+        }
     } catch (error) {
-        console.error('Error compiling contract:', error);
+        console.error('Error in contractCompiler:', error);
         throw error;
     }
 }
