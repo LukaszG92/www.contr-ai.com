@@ -2,11 +2,9 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm, Fields, Files, File } from 'formidable';
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { Readable } from 'stream';
 import path from "path";
 import fs from "fs/promises";
 import { contractCompiler } from '@/lib/contractCompiler';
-import archiver from 'archiver';
 
 export const config = {
     api: {
@@ -97,10 +95,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             uploadFileToS3(process.env.S3_BUCKET_NAME, creditiKey, getSafeFilepath(creditiFile)),
         ]);
 
-        const zipFileName = `${username}_contracts_${Date.now()}.zip`;
-        console.log('Creating zip archive:', zipFileName);
-        const archive = archiver('zip', { zlib: { level: 9 } });
-
         const listParams = {
             Bucket: process.env.S3_BUCKET_NAME,
             Prefix: `${username}/`,
@@ -111,6 +105,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const fileList = listResult.Contents?.filter(object => object.Key?.endsWith('.docx')).map(object => object.Key!) ?? [];
         console.log('Found', fileList.length, '.docx files');
 
+        const compiledFiles = [];
         for (const file of fileList) {
             console.log('Processing file:', file);
             const outputKey = `${username}/${trimExtension(path.basename(file))}Compilato.docx`;
@@ -127,66 +122,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 creditiKey
             );
 
-            console.log('Fetching compiled contract from S3:', outputKey);
-            const { Body } = await s3Client.send(new GetObjectCommand({
+            console.log('Generating pre-signed URL for:', outputKey);
+            const url = await getSignedUrl(s3Client, new GetObjectCommand({
                 Bucket: process.env.S3_BUCKET_NAME,
                 Key: outputKey,
-            }));
+            }), { expiresIn: 3600 }); // URL expires in 1 hour
 
-            if (Body instanceof Readable) {
-                const fileName = path.basename(outputKey);
-                if (fileName) {
-                    console.log('Adding file to archive:', fileName);
-                    archive.append(Body, { name: fileName });
-                } else {
-                    console.warn(`Unable to determine file name for ${outputKey}, skipping this file`);
-                }
-            } else {
-                throw new Error(`Unexpected body type for file ${outputKey}`);
-            }
+            compiledFiles.push({ fileName: path.basename(outputKey), url });
         }
 
-        // Finalize the archive and upload to S3
-        console.log('Finalizing zip archive');
-        const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
-            const chunks: any[] = [];
-            archive.on('data', (chunk) => chunks.push(chunk));
-            archive.on('error', (err) => {
-                console.error('Error during archive finalization:', err);
-                reject(err);
-            });
-            archive.on('end', () => {
-                console.log('Archive finalization completed');
-                resolve(Buffer.concat(chunks));
-            });
-            archive.finalize();
-        });
-
-        console.log('Uploading zip file to S3');
-        await s3Client.send(new PutObjectCommand({
-            Bucket: process.env.S3_BUCKET_NAME,
-            Key: `${username}/${zipFileName}`,
-            Body: zipBuffer,
-        }));
-
-        // Generate a pre-signed URL for downloading the zip file
-        console.log('Generating pre-signed URL');
-        const url = await getSignedUrl(s3Client, new GetObjectCommand({
-            Bucket: process.env.S3_BUCKET_NAME,
-            Key: `${username}/${zipFileName}`,
-        }), { expiresIn: 3600 }); // URL expires in 1 hour
-
-        console.log('Sending response with download URL');
-        res.status(200).json({ url });
+        console.log('Sending response with download URLs');
+        res.status(200).json({ files: compiledFiles });
 
         // Clean up temporary files in S3
         console.log('Cleaning up temporary files');
         await Promise.all([
             s3Client.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: visuraKey })),
             s3Client.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: creditiKey })),
-            ...fileList.map(file =>
-                s3Client.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: `${username}/${trimExtension(path.basename(file))}Compilato.docx` }))
-            )
         ]);
 
         console.log('API route handler completed successfully');
