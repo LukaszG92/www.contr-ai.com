@@ -24,7 +24,36 @@ const s3Client = new S3Client({
         : undefined,
 });
 
-// ... (other helper functions remain the same)
+const trimExtension = (contractName: string): string => {
+    const suffix = '.docx';
+    return contractName.endsWith(suffix) ? contractName.slice(0, -suffix.length) : contractName;
+};
+
+const getSafeFilepath = (file: File | File[] | undefined): string => {
+    if (Array.isArray(file)) {
+        return file[0]?.filepath || '';
+    }
+    return file?.filepath || '';
+};
+
+const ensureString = (value: unknown): string => {
+    if (typeof value === 'string') {
+        return value;
+    }
+    if (Array.isArray(value) && typeof value[0] === 'string') {
+        return value[0];
+    }
+    return '';
+};
+
+async function uploadFileToS3(bucket: string, key: string, filepath: string): Promise<void> {
+    const fileContent = await fs.readFile(filepath);
+    await s3Client.send(new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: fileContent,
+    }));
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     console.log('API route handler started');
