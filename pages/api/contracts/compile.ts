@@ -7,7 +7,6 @@ import path from "path";
 import fs from "fs/promises";
 import { contractCompiler } from '@/lib/contractCompiler';
 import archiver from 'archiver';
-import { PassThrough } from 'stream';
 
 export const config = {
     api: {
@@ -93,9 +92,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const zipFileName = `${username}_contracts_${Date.now()}.zip`;
         const archive = archiver('zip', { zlib: { level: 9 } });
-        const passThrough = new PassThrough();
-
-        archive.pipe(passThrough);
 
         const listParams = {
             Bucket: process.env.S3_BUCKET_NAME,
@@ -136,13 +132,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
         }
 
-        await archive.finalize();
+        // Finalize the archive and upload to S3
+        const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
+            const chunks: any[] = [];
+            archive.on('data', (chunk) => chunks.push(chunk));
+            archive.on('error', reject);
+            archive.on('end', () => resolve(Buffer.concat(chunks)));
+            archive.finalize();
+        });
 
-        // Upload the zip file to S3
         await s3Client.send(new PutObjectCommand({
             Bucket: process.env.S3_BUCKET_NAME,
             Key: `${username}/${zipFileName}`,
-            Body: passThrough,
+            Body: zipBuffer,
         }));
 
         // Generate a pre-signed URL for downloading the zip file
