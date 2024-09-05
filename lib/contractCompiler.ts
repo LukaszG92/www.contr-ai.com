@@ -9,20 +9,110 @@ const s3Client = new S3Client({
     region: process.env.AWS_REGION || 'us-east-1',
 });
 
-// ... (other helper functions remain the same)
+function getCurrentDate(): string {
+    const date = new Date();
+    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+}
+
+function findRepeatingSubstring(str: string): string {
+    if (str.length === 0) {
+        return str;
+    }
+
+    for (let i = 1; i <= str.length / 2; i++) {
+        if (str.length % i === 0) {
+            const substring = str.slice(0, i);
+            if (substring.repeat(str.length / i) === str) {
+                return substring;
+            }
+        }
+    }
+
+    return str;
+}
+
+function cleanText(text: string): string {
+    return text.replace(/\r\n/g, ' ').trim();
+}
+
+async function getS3FileContent(bucket: string, key: string): Promise<Buffer> {
+    console.log(`Fetching S3 file content: s3://${bucket}/${key}`);
+    const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+    const response = await s3Client.send(command);
+    return streamToBuffer(response.Body as Readable);
+}
+
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+        const chunks: any[] = [];
+        stream.on('data', (chunk) => chunks.push(chunk));
+        stream.on('error', reject);
+        stream.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+}
 
 async function extractVisuraInfo(bucket: string, key: string): Promise<Record<string, string>> {
     console.log('Extracting Visura info from:', key);
     const pdfContent = await getS3FileContent(bucket, key);
-    // ... (rest of the function remains the same)
-    console.log('Visura info extracted successfully');
-    return replacements;
+    const info = [
+        'CAPITALE', 'Il QR ', 'Indirizzo Sede legale', 'Domicilio digitale/PEC',
+        'Numero REARM - ', 'Codice fiscale e n.iscr. al\r\nRegistro Imprese',
+        'Partita IVA', 'Forma giuridica', 'Data atto di costituzione',
+        'Data iscrizione', 'Data ultimo protocollo', 'Amministratore Unico', 'Rappresentante'
+    ];
+    const fieldNames = [
+        'società', '', 'sede legale', 'pec', 'rearm', 'codice fiscale',
+        'partita iva', 'forma giuridica', 'data costituzione', 'data iscrizione',
+        'data ultimo protocollo', 'amministratore unico'
+    ];
+
+    return new Promise((resolve, reject) => {
+        const pdfParser = new PDFParser();
+
+        pdfParser.on("pdfParser_dataError", (error) => {
+            console.error('PDF parsing failed:', error);
+            reject(new Error('PDF parsing failed: ' + error));
+        });
+
+        pdfParser.on("pdfParser_dataReady", (pdfData) => {
+            const text = pdfParser.getRawTextContent();
+            const replacements: Record<string, string> = {
+                'data odierna': getCurrentDate()
+            };
+
+            for (let i = 0; i < info.length - 1; i++) {
+                if (i !== 1 && i !== 12) {
+                    const start = text.indexOf(info[i]) + info[i].length;
+                    const end = text.indexOf(info[i + 1]);
+                    const value = cleanText(text.slice(start, end));
+                    replacements[fieldNames[i]] = i === 0 ? value.slice(0, value.lastIndexOf(' ')) : findRepeatingSubstring(value);
+                }
+            }
+
+            console.log('Visura info extracted successfully');
+            resolve(replacements);
+        });
+
+        pdfParser.parseBuffer(pdfContent);
+    });
 }
 
 async function extractCreditiInfo(bucket: string, key: string): Promise<Record<string, number>> {
     console.log('Extracting Crediti info from:', key);
     const xlsxContent = await getS3FileContent(bucket, key);
-    // ... (rest of the function remains the same)
+    const workbook = xlsx.read(xlsxContent, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const sheetData = xlsx.utils.sheet_to_json(worksheet);
+
+    let sums = new Map<string, number>();
+    sheetData.forEach((row: any) => {
+        if (String(row['__EMPTY_12']).includes('cedibile a chiunque')) {
+            const key = 'Crediti' + row['__EMPTY_4'];
+            sums.set(key, (sums.get(key) || 0) + row['__EMPTY_5']);
+        }
+    });
+
     console.log('Crediti info extracted successfully');
     return Object.fromEntries(sums);
 }
