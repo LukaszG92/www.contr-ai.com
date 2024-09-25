@@ -131,7 +131,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
-
+    console.log('Starting compile...')
     try {
         const form = new IncomingForm();
         const [fields, files] = await new Promise<[Fields, Files]>((resolve, reject) => {
@@ -146,6 +146,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const visuraFile = files.visura;
         const creditiFile = files.crediti;
 
+        console.log(`Got from the form the following data username: ${username}, percentuale ${percentuale}, visuraFile: ${visuraFile}, ${creditiFile}`)
         if (!visuraFile || !creditiFile) {
             return res.status(400).json({ error: 'I file Visura e Crediti sono richiesti.' });
         }
@@ -169,6 +170,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
         let listCommand = new ListObjectsV2Command(listParams)
         const data = await s3Client.send(listCommand);
+
+        console.log(`Got list data: ${data}`)
+
         const contracts = data.Contents?.map(object => object.Key) ?? [];
 
         let archiveData:any[] = []
@@ -179,6 +183,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             };
             const getCommand = new GetObjectCommand(getParams);
             const response = await s3Client.send(getCommand);
+
+
             if(response.Body) {
                 let buffer = await response.Body.transformToString()
                 let reader = new FileReader()
