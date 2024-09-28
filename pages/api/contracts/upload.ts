@@ -40,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const fileContent = await fs.readFile(file.filepath);
 
         const uploadParams = {
-            Bucket: process.env.S3_BUCKET_NAME,
+            Bucket: 'www.contr-ai.com',
             Key: `${username}/${newFileName}`,
             Body: fileContent,
         };

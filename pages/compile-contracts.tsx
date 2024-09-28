@@ -1,4 +1,4 @@
-import { useState, ChangeEvent, FormEvent } from 'react'
+import {useState, ChangeEvent, FormEvent, useEffect} from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
@@ -13,10 +13,35 @@ interface CustomReplacement {
 }
 
 const CompileContractsPage = () => {
+    const [contracts, setContracts] = useState<string[]>([])
     const [visura, setVisura] = useState<File | null>(null)
     const [crediti, setCrediti] = useState<File | null>(null)
     const [percentuale, setPercentuale] = useState<string>('0')
     const [customReplacements, setCustomReplacements] = useState<CustomReplacement[]>([{ placeholder: '', replacement: '' }])
+
+    useEffect(() => {
+        const getContracts = async () => {
+            const username = localStorage.getItem('username')
+            if (!username) {
+                console.error('Username not found in localStorage')
+                return
+            }
+
+            try {
+                const response = await fetch(`/api/contracts/${username}`)
+                if (response.ok) {
+                    const responseData = await response.json()
+                    setContracts(responseData.data.contratti)
+                    console.log(responseData.data.contratti)
+                } else {
+                    throw new Error('Failed to fetch contracts')
+                }
+            } catch (error) {
+                console.error('Error fetching contracts:', error)
+            }
+        }
+        getContracts()
+    }, [])
 
     const handleVisuraChange = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -64,6 +89,42 @@ const CompileContractsPage = () => {
         e.preventDefault()
         if (visura && crediti) {
             try {
+                let formData = new FormData()
+                formData.append('visura', visura)
+
+                let response = await fetch('/api/contracts/compile/visura-extractor', {
+                    method: 'POST',
+                    body: formData
+                }as RequestInit)
+
+                let responseJson = await response.json()
+                let visuraReplacements = responseJson.replacements
+
+
+                formData = new FormData()
+                formData.append('crediti', crediti)
+
+                response = await fetch('/api/contracts/compile/crediti-extractor', {
+                    method: 'POST',
+                    body: formData
+                }as RequestInit)
+
+                responseJson = await response.json()
+                let creditiReplacements = responseJson.replacements
+
+                let replacements = {
+                    ...creditiReplacements,
+                    ...visuraReplacements
+                }
+
+                customReplacements.forEach(elem => {
+                    replacements[elem.placeholder] = elem.replacement
+                })
+
+                console.log(replacements)
+
+
+                /*
                 const formData = new FormData()
                 formData.append('visura', visura)
                 formData.append('crediti', crediti)
@@ -73,20 +134,18 @@ const CompileContractsPage = () => {
                     formData.append('username', username)
                 }
 
-                customReplacements.forEach((replacement, index) => {
-                    if (replacement.placeholder && replacement.replacement) {
-                        formData.append(`customReplacement[${index}][placeholder]`, replacement.placeholder)
-                        formData.append(`customReplacement[${index}][replacement]`, replacement.replacement)
-                    }
-                })
 
-                const response = await fetch('/api/contracts/compile', {
+
+
+
+                response = await fetch('/api/contracts/compile', {
                     method: 'POST',
                     body: formData,
                 }as RequestInit)
 
                 const blob = await response.blob()
                 saveAs(blob, `${username || 'user'}_contracts_${Date.now()}.zip`)
+                 */
             } catch (error) {
                 console.error('Error:', error)
                 alert('An error occurred while uploading the files.')

@@ -1,15 +1,12 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
-// Initialize the S3 client
 const s3Client = new S3Client({
-    region: process.env.AWS_REGION,
-    credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
-        ? {
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        }
-        : undefined,
+    region: 'eu-west-3',
+    credentials: {
+        accessKeyId: 'AKIAU6YXU6JPHNVJSH5J',
+        secretAccessKey: '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',
+    },
 });
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -21,14 +18,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'Invalid filename or username' });
         }
 
-        if (!process.env.S3_BUCKET_NAME) {
-            console.error('S3_BUCKET_NAME is not defined in environment variables');
-            return res.status(500).json({ error: 'Server configuration error' });
-        }
-
         try {
             const deleteParams = {
-                Bucket: process.env.S3_BUCKET_NAME,
+                Bucket: 'www.contr-ai.com',
                 Key: `${username}/${filename}`,
             };
 
