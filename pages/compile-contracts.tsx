@@ -123,6 +123,51 @@ const CompileContractsPage = () => {
 
                 console.log(replacements)
 
+                const username = localStorage.getItem('username')
+                if (!username) {
+                    console.error('Username not found in localStorage')
+                    return
+                }
+
+                for (const contract of contracts) {
+                    formData = new FormData();
+                    formData.append('contract', contract);
+                    formData.append('replacements', JSON.stringify(replacements));
+                    formData.append('username', username);
+
+                    response = await fetch('/api/contracts/compile/compile', {
+                        method: 'POST',
+                        body: formData
+                    } as RequestInit);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    // Parse the JSON response
+                    const responseData = await response.json();
+
+                    if (!responseData.contract || !responseData.contract.data) {
+                        throw new Error('Contract data not found in the response');
+                    }
+
+                    // Create a Uint8Array from the data array in the response
+                    const uint8Array = new Uint8Array(responseData.contract.data);
+
+                    // Create a Blob from the Uint8Array
+                    const blob = new Blob([uint8Array], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+                    // Create a download link and trigger the download
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = `contrattoCompilato_${Date.now()}.docx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                }
 
                 /*
                 const formData = new FormData()
