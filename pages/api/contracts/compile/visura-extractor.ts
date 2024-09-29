@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import multiparty from 'multiparty';
 import { readFile } from 'fs/promises';
 import pdf from 'pdf-parse';
+import {NextApiRequest, NextApiResponse} from "next";
 
 
 function getCurrentDate(): string {
@@ -63,7 +64,13 @@ export const config = {
     },
 };
 
-const parseForm = (req) => {
+interface ParsedForm {
+    files: Record<string, any>;
+    fields: Record<string, any>;
+}
+
+
+const parseForm = (req: NextApiRequest) => {
     return new Promise((resolve, reject) => {
         const form = new multiparty.Form();
 
@@ -74,13 +81,13 @@ const parseForm = (req) => {
     });
 };
 
-export default async function handler(req, res) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
     try {
-        const { files } = await parseForm(req);
+        const { files } = await parseForm(req) as ParsedForm;
         const visuraFile = files.visura[0].path;
         const visuraReplacements = await extractVisuraInfo(visuraFile);
 
