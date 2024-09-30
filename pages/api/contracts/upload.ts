@@ -10,10 +10,10 @@ export const config = {
 };
 
 const s3Client = new S3Client({
-    region: 'eu-west-3',
+    region: process.env.AWS_REGION,
     credentials: {
-        accessKeyId: 'AKIAU6YXU6JPHNVJSH5J',
-        secretAccessKey: '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',
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
     },
 });
 
@@ -40,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const fileContent = await fs.readFile(file.filepath);
 
         const uploadParams = {
-            Bucket: 'www.contr-ai.com',
+            Bucket: process.env.S3_BUCKET_NAME,
             Key: `${username}/${newFileName}`,
             Body: fileContent,
         };

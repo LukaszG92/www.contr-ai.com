@@ -2,10 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 const s3Client = new S3Client({
-    region: 'eu-west-3',
+    region: process.env.AWS_REGION,
     credentials: {
-        accessKeyId: 'AKIAU6YXU6JPHNVJSH5J',
-        secretAccessKey: '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',
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
     },
 });
 
@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         try {
             const deleteParams = {
-                Bucket: 'www.contr-ai.com',
+                Bucket: process.env.S3_BUCKET_NAME,
                 Key: `${username}/${filename}`,
             };
 

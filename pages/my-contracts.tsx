@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Trash2, Plus } from 'lucide-react'
+import {Trash2, Plus, Loader2} from 'lucide-react'
 import Topbar from "@/components/Topbar"
 import {withAuth} from "@/components/withAuth";
 
 const MyContractsPage = () => {
+    const [loading, setLoading] = useState<boolean>(false)
     const [contracts, setContracts] = useState<string[]>([])
     const [newFile, setNewFile] = useState<File | null>(null)
     const [showForm, setShowForm] = useState<boolean>(false)
@@ -96,6 +97,7 @@ const MyContractsPage = () => {
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault();
+        setLoading(true)
         if (newFile) {
             try {
                 const formData = new FormData();
@@ -123,8 +125,11 @@ const MyContractsPage = () => {
             } catch (error) {
                 console.error('Errore:', error);
                 alert(error instanceof Error ? error.message : 'Si è verificato un errore durante il caricamento del file.');
+            } finally {
+                setLoading(false)
             }
         } else {
+            setLoading(false)
             alert('Per favore, seleziona un file .docx prima di inviare.');
         }
     };
@@ -194,7 +199,11 @@ const MyContractsPage = () => {
                                     <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
                                         Annulla
                                     </Button>
-                                    <Button type="submit">Carica Contratto</Button>
+                                    { loading ?
+                                        <Button disabled>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading
+                                        </Button> :
+                                        <Button type="submit">Carica Contratto</Button>}
                                 </div>
                             </form>
                         </CardContent>

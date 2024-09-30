@@ -2,10 +2,11 @@ import {useState, ChangeEvent, FormEvent, useEffect} from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
-import { Plus } from 'lucide-react'
+import {Loader2, Plus} from 'lucide-react'
 import Topbar from "@/components/Topbar"
 import { saveAs } from 'file-saver'
 import {withAuth} from "@/components/withAuth";
+import JSZip from 'jszip';
 
 interface CustomReplacement {
     placeholder: string
@@ -13,6 +14,7 @@ interface CustomReplacement {
 }
 
 const CompileContractsPage = () => {
+    const [loading, setLoading] = useState<boolean>(false)
     const [contracts, setContracts] = useState<string[]>([])
     const [visura, setVisura] = useState<File | null>(null)
     const [crediti, setCrediti] = useState<File | null>(null)
@@ -87,6 +89,7 @@ const CompileContractsPage = () => {
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
+        setLoading(true)
         if (visura && crediti) {
             try {
                 let formData = new FormData()
@@ -129,6 +132,10 @@ const CompileContractsPage = () => {
                     return
                 }
 
+                // Create a new JSZip instance
+                const zip = new JSZip();
+
+                // Compile each contract and add to zip
                 for (const contract of contracts) {
                     formData = new FormData();
                     formData.append('contract', contract);
@@ -140,6 +147,7 @@ const CompileContractsPage = () => {
                         body: formData
                     } as RequestInit);
 
+                    // Check if the response is successful
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
@@ -147,55 +155,31 @@ const CompileContractsPage = () => {
                     // Parse the JSON response
                     const responseData = await response.json();
 
-                    if (!responseData.contract || !responseData.contract.data) {
+                    if (!responseData.data.contract || !responseData.data.contract.data) {
                         throw new Error('Contract data not found in the response');
                     }
 
                     // Create a Uint8Array from the data array in the response
-                    const uint8Array = new Uint8Array(responseData.contract.data);
+                    const uint8Array = new Uint8Array(responseData.data.contract.data);
 
-                    // Create a Blob from the Uint8Array
-                    const blob = new Blob([uint8Array], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-
-                    // Create a download link and trigger the download
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = `contrattoCompilato_${Date.now()}.docx`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
+                    // Add the file to the zip
+                    zip.file(`compiled_${responseData.data.filename}`, uint8Array, {binary: true});
                 }
 
-                /*
-                const formData = new FormData()
-                formData.append('visura', visura)
-                formData.append('crediti', crediti)
-                formData.append('percentuale', percentuale)
-                const username = localStorage.getItem('username')
-                if (username) {
-                    formData.append('username', username)
-                }
+                // Generate the zip file
+                const zipContent = await zip.generateAsync({type: 'blob'});
 
+                // Download the zip file
+                saveAs(zipContent, `contratti_compilati_${username}_${Date.now()}.zip`);
 
-
-
-
-                response = await fetch('/api/contracts/compile', {
-                    method: 'POST',
-                    body: formData,
-                }as RequestInit)
-
-                const blob = await response.blob()
-                saveAs(blob, `${username || 'user'}_contracts_${Date.now()}.zip`)
-                 */
             } catch (error) {
                 console.error('Error:', error)
                 alert('An error occurred while uploading the files.')
+            } finally {
+                setLoading(false)
             }
         } else {
+            setLoading(false)
             if (!visura) {
                 alert('Please upload the Visura file before submitting.')
             } else if (!crediti) {
@@ -274,7 +258,12 @@ const CompileContractsPage = () => {
                                 </Button>
                             </div>
 
-                            <Button type="submit">Compila Contratto</Button>
+                            { loading ?
+                                <Button disabled>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading
+                                </Button> :
+                                <Button type="submit">Compila Contratto</Button>
+                            }
                         </form>
                     </CardContent>
                 </Card>

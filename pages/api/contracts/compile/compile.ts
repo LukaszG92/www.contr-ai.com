@@ -51,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
-    console.log('Starting compile...')
+
     try {
         const { fields } = await parseForm(req) as ParsedForm;
 
@@ -63,15 +63,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Initialize the S3 client
         const s3Client = new S3Client({
-            region: 'eu-west-3',
+            region: process.env.AWS_REGION,
             credentials: {
-                accessKeyId: 'AKIAU6YXU6JPHNVJSH5J',
-                secretAccessKey: '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',
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
             },
         });
 
         const command = new GetObjectCommand({
-            Bucket: 'www.contr-ai.com',
+            Bucket: process.env.S3_BUCKET_NAME,
             Key: `${username}/${contract}`,
         });
 
@@ -81,7 +81,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const fileBuffer = await streamToBuffer(response.Body);
             let compiledBuffer = replaceTextInDocx(fileBuffer, replacements);
 
-            res.status(200).json({ message: 'Contratto compilato con successo', contract: compiledBuffer });
+            res.status(200).json({ message: 'Contratto compilato con successo', data: {
+                    contract: compiledBuffer,
+                    filename: contract
+                } });
         } else {
             throw new Error("Response body is not a readable stream");
         }
