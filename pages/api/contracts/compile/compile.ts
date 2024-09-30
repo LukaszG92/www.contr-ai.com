@@ -8,12 +8,11 @@ import { Readable } from 'stream';
 
 function replaceTextInDocx(
     inputBuffer: Buffer,
-    replacements: Record<string, string | number>
+    replacements: string
 ): Buffer {
     const zip = new PizZip(inputBuffer);
     const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
-    doc.setData(replacements);
-    doc.render();
+    doc.render(JSON.parse(replacements));
     return doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' }) as Buffer;
 }
 
@@ -55,11 +54,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
         const { fields } = await parseForm(req) as ParsedForm;
 
-        const replacements = fields.replacements;
+        const replacements = fields.replacements[0];
         const contract = fields.contract[0];
         const username = fields.username[0];
-
-        console.log(contract);
 
         // Initialize the S3 client
         const s3Client = new S3Client({

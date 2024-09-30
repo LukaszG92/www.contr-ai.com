@@ -24,7 +24,7 @@ function findRepeatingSubstring(str: string): string {
 }
 
 function cleanText(text: string): string {
-    return text.replace(/\r\n/g, ' ').trim();
+    return text.replace(/[\r\n]/g, ' ').trim();
 }
 
 async function extractVisuraInfo(file: string): Promise<Record<string, string>> {
@@ -51,7 +51,7 @@ async function extractVisuraInfo(file: string): Promise<Record<string, string>> 
                 const start = text.indexOf(info[i]) + info[i].length;
                 const end = text.indexOf(info[i + 1]);
                 const value = cleanText(text.slice(start, end));
-                replacements[fieldNames[i]] = i === 0 ? value.slice(0, value.lastIndexOf(' ')) : findRepeatingSubstring(value);
+                replacements[fieldNames[i]] = i === 0 ? cleanText(value.slice(0, value.lastIndexOf(' '))) : findRepeatingSubstring(value);
             }
         }
         resolve(replacements);
