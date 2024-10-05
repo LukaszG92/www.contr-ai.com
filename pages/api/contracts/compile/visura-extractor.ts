@@ -12,48 +12,61 @@ function getCurrentDate(): string {
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
 }
 
-function findRepeatingSubstring(str: string): string {
-    if (str.length === 0) return str;
-    for (let i = 1; i <= str.length / 2; i++) {
-        if (str.length % i === 0) {
-            const substring = str.slice(0, i);
-            if (substring.repeat(str.length / i) === str) return substring;
-        }
-    }
-    return str;
+function removeLastWord(str: string) {
+    return str.replace(/\s+\S+$/, '');
 }
 
 function cleanText(text: string): string {
     return text.replace(/[\r\n]/g, ' ').trim();
 }
+function getSocieta(text: string) {
+    const start = text.indexOf('CAPITALE') + 'CAPITALE'.length;
+    const end = text.indexOf('Il QR ');
+    let value = cleanText(text.slice(start, end));
+    value = removeLastWord(value)
+    return cleanText(value)
+}
+
+function getSedeLegale(text: string) {
+    const start = text.indexOf('Indirizzo Sede legale') + 'Indirizzo Sede legale'.length;
+    const end = text.indexOf('Domicilio digitale/PEC');
+    return cleanText(text.slice(start, end));
+}
+
+function getPec(text: string) {
+    const start = text.indexOf('Domicilio digitale/PEC') + 'Domicilio digitale/PEC'.length;
+    const end = text.indexOf('Numero');
+    return cleanText(text.slice(start, end));
+}
+
+function getPartitaIva(text: string){
+    const start = text.indexOf('Partita IVA') + 'Partita IVA'.length;
+    const end = text.indexOf('Forma giuridica');
+    return cleanText(text.slice(start, end));
+}
+
+function getAmministratore(text: string) {
+    const start = text.indexOf('Amministratore Unico') + 'Amministratore Unico'.length;
+    const end = text.indexOf('Rappresentante');
+    return cleanText(text.slice(start, end));
+}
 
 async function extractVisuraInfo(file: string): Promise<Record<string, string>> {
-    const info = [
-        'CAPITALE', 'Il QR ', 'Indirizzo Sede legale', 'Domicilio digitale/PEC',
-        'Numero REARM - ', 'Codice fiscale e n.iscr. al\nRegistro Imprese\n',
-        'Partita IVA', 'Forma giuridica', 'Data atto di costituzione',
-        'Data iscrizione', 'Data ultimo protocollo', 'Amministratore Unico', 'Rappresentante'
-    ];
-    const fieldNames = [
-        'società', '', 'sede legale', 'pec', 'rearm', 'codice fiscale',
-        'partita iva', 'forma giuridica', 'data costituzione', 'data iscrizione',
-        'data ultimo protocollo', 'amministratore unico'
-    ];
 
     return new Promise(async (resolve, reject) => {
         const dataBuffer = await readFile(file);
         const data = await pdf(dataBuffer);
         const text = data.text
 
-        const replacements: Record<string, string> = { 'data odierna': getCurrentDate() };
-        for (let i = 0; i < info.length - 1; i++) {
-            if (i !== 1 && i !== 12) {
-                const start = text.indexOf(info[i]) + info[i].length;
-                const end = text.indexOf(info[i + 1]);
-                const value = cleanText(text.slice(start, end));
-                replacements[fieldNames[i]] = i === 0 ? cleanText(value.slice(0, value.lastIndexOf(' '))) : findRepeatingSubstring(value);
-            }
-        }
+        console.log("Extracting visura...")
+
+        const replacements: Record<string, string> = { 'data': getCurrentDate() };
+        replacements['società'] = getSocieta(text)
+        replacements['sede legale'] = getSedeLegale(text)
+        replacements['pec'] = getPec(text)
+        replacements['partita iva'] = getPartitaIva(text)
+        replacements['rappresentante legale'] = getAmministratore(text)
+
         resolve(replacements);
         });
 }

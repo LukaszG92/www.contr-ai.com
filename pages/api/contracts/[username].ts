@@ -2,10 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 
 const s3Client = new S3Client({
-    region: process.env.AWS_REGION,
+    region: 'eu-west-3',
     credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        accessKeyId: 'AKIAU6YXU6JPHNVJSH5J',
+        secretAccessKey: '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',
     },
 });
 
@@ -23,20 +23,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
     }
 
-    console.log(`Retrieving the ${username} files ...`)
-
     try {
         const listParams = {
-            Bucket: process.env.S3_BUCKET_NAME,
+            Bucket: 'www.contr-ai.com',
             Prefix: `${username}/`,
         };
 
         const data = await s3Client.send(new ListObjectsV2Command(listParams));
         const contracts = data.Contents?.map(object => object.Key?.split('/').pop()) ?? [];
-
-        contracts.forEach( (contract) => {
-            console.log(contract)
-        })
 
         res.status(200).json({
             status: "success",
