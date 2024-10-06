@@ -3,15 +3,21 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
-import {Loader2, Plus} from 'lucide-react'
+import {Loader2, Plus, Info, HelpCircle} from 'lucide-react'
 import Topbar from "@/components/Topbar"
 import { saveAs } from 'file-saver'
 import {withAuth} from "@/components/withAuth";
 import JSZip from 'jszip';
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from "@/components/ui/tooltip"
 
 interface CustomReplacement {
     placeholder: string
     replacement: string
+}
+
+interface CreditiManuali {
+    anno: string
+    crediti: string
 }
 
 const CompileContractsPage = () => {
@@ -21,10 +27,12 @@ const CompileContractsPage = () => {
     const [contracts, setContracts] = useState<string[]>([])
     const [visura, setVisura] = useState<File | null>(null)
     const [crediti, setCrediti] = useState<File | null>(null)
+    const [creditiManuali, setCreditiManuali] = useState<CreditiManuali[]>([{ anno: '', crediti: '' }])
     const [percentualeCessione, setPercentualeCessione] = useState<string>('0')
     const [percentualeRevisione, setPercentualeRevisione] = useState<string>('0')
     const [percentualeConsulenza, setPercentualeConsulenza] = useState<string>('0')
     const [iban, setIban] = useState<string>('')
+    const [creditiManuale, setCreditiManuale] = useState<boolean>(false)
     const [customReplacements, setCustomReplacements] = useState<CustomReplacement[]>([{ placeholder: '', replacement: '' }])
     const [startYear, setStartYear] = useState<number>(currentYear)
     const [endYear, setEndYear] = useState<number>(currentYear)
@@ -99,6 +107,12 @@ const CompileContractsPage = () => {
         }
     };
 
+    const handleCreditiManualiChange = (index: number, field: keyof CreditiManuali, value: string) => {
+        const updatedCrediti = [...creditiManuali];
+        updatedCrediti[index][field] = value;
+        setCreditiManuali(updatedCrediti);
+    };
+
     const handleCustomReplacementChange = (index: number, field: keyof CustomReplacement, value: string) => {
         const updatedReplacements = [...customReplacements];
         updatedReplacements[index][field] = value;
@@ -132,6 +146,15 @@ const CompileContractsPage = () => {
         }
     };
 
+    const addCreditiManuali = () => {
+        if (creditiManuali[creditiManuali.length - 1].anno &&
+            creditiManuali[creditiManuali.length - 1].crediti) {
+            setCreditiManuali([...creditiManuali, { anno: '', crediti: '' }]);
+        } else {
+            alert('Per favore, compila entrambi i campi dell\'ultima sostituzione prima di aggiungerne una nuova.');
+        }
+    };
+
     function numeroInLettere(n: number): string {
         const numeri: { [key: number]: string } = {
             1: "uno", 2: "due", 3: "tre", 4: "quattro", 5: "cinque", 6: "sei", 7: "sette", 8: "otto", 9: "nove", 10: "dieci",
@@ -156,13 +179,44 @@ const CompileContractsPage = () => {
         }
     }
 
+    interface LabelWithTooltipProps {
+        htmlFor: string;
+        label: string;
+        tooltipContent: string;
+    }
+
+    const LabelWithTooltip: React.FC<LabelWithTooltipProps> = ({ htmlFor, label, tooltipContent }) => (
+        <div className="flex items-center space-x-1 mb-1">
+            <label htmlFor={htmlFor} className="block text-sm font-medium text-gray-700">
+                {label}
+            </label>
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <button
+                            type="button"
+                            className="focus:outline-none"
+                            onClick={(e) => e.preventDefault()}
+                        >
+                            <HelpCircle className="h-3 w-3 text-gray-400" />
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" align="start" className="max-w-xs">
+                        <p className="text-xs text-gray-500">{tooltipContent}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        </div>
+    )
+
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         setLoading(true)
-        if (visura && crediti) {
-            try {
-                let formData = new FormData()
+        try {
+            let formData = new FormData()
+            let visuraReplacements = {}
+            if(visura) {
                 formData.append('visura', visura)
 
                 let response = await fetch('/api/contracts/compile/visura-extractor', {
@@ -171,9 +225,11 @@ const CompileContractsPage = () => {
                 }as RequestInit)
 
                 let responseJson = await response.json()
-                let visuraReplacements = responseJson.replacements
+                visuraReplacements = responseJson.replacements
+            }
 
-
+            let creditiReplacements = {}
+            if(crediti) {
                 formData = new FormData()
                 formData.append('crediti', crediti)
                 formData.append('percentuale_cessione', `${percentualeCessione}`)
@@ -182,87 +238,109 @@ const CompileContractsPage = () => {
                 formData.append('anno_iniziale', String(startYear))
                 formData.append('anno_finale', String(endYear))
 
-                response = await fetch('/api/contracts/compile/crediti-extractor', {
+                let response = await fetch('/api/contracts/compile/crediti-extractor', {
                     method: 'POST',
                     body: formData
-                }as RequestInit)
+                } as RequestInit)
 
-                responseJson = await response.json()
-                let creditiReplacements = responseJson.replacements
-
-                let replacements = {
-                    ...creditiReplacements,
-                    ...visuraReplacements,
-                    'percentuale cessione': `${percentualeCessione}% (${numeroInLettere(Number(percentualeCessione))}) `,
-                    'percentuale revisione': `${percentualeRevisione}% (${numeroInLettere(Number(percentualeRevisione))}) `,
-                    'percentuale consulenza': `${percentualeConsulenza}% (${numeroInLettere(Number(percentualeConsulenza))}) `,
-                    'iban': iban
-                }
-
-                customReplacements.forEach(elem => {
-                    replacements[elem.placeholder] = elem.replacement
+                let responseJson = await response.json()
+                creditiReplacements = responseJson.replacements
+            } else {
+                formData = new FormData()
+                let crediti: Record<string, number> = {}
+                creditiManuali.forEach(elem => {
+                    crediti[elem.anno] = Number(elem.crediti)
                 })
 
-                const username = localStorage.getItem('username')
-                if (!username) {
-                    console.error('Username not found in localStorage')
-                    return
-                }
+                formData.append('crediti', JSON.stringify(crediti))
+                formData.append('percentuale_cessione', `${percentualeCessione}`)
+                formData.append('percentuale_revisione', `${percentualeRevisione}`)
+                formData.append('percentuale_consulenza', `${percentualeConsulenza}`)
 
-                // Create a new JSZip instance
-                const zip = new JSZip();
+                let response = await fetch('/api/contracts/compile/crediti-calculator', {
+                    method: 'POST',
+                    body: formData
+                } as RequestInit)
 
-                // Compile each contract and add to zip
-                for (const contract of contracts) {
-                    formData = new FormData();
-                    formData.append('contract', contract);
-                    formData.append('replacements', JSON.stringify(replacements));
-                    formData.append('username', username);
-
-                    response = await fetch('/api/contracts/compile/compile', {
-                        method: 'POST',
-                        body: formData
-                    } as RequestInit);
-
-                    // Check if the response is successful
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-
-                    // Parse the JSON response
-                    const responseData = await response.json();
-
-                    if (!responseData.data.contract || !responseData.data.contract.data) {
-                        throw new Error('Contract data not found in the response');
-                    }
-
-                    // Create a Uint8Array from the data array in the response
-                    const uint8Array = new Uint8Array(responseData.data.contract.data);
-
-                    // Add the file to the zip
-                    zip.file(`compiled_${responseData.data.filename}`, uint8Array, {binary: true});
-                }
-
-                // Generate the zip file
-                const zipContent = await zip.generateAsync({type: 'blob'});
-
-                // Download the zip file
-                saveAs(zipContent, `contratti_compilati_${username}_${Date.now()}.zip`);
-
-            } catch (error) {
-                console.error('Error:', error)
-                alert('An error occurred while uploading the files.')
-            } finally {
-                setLoading(false)
+                let responseJson = await response.json()
+                creditiReplacements = responseJson.replacements
             }
-        } else {
+
+            let replacements: Record<string, string> = {
+                ...creditiReplacements,
+                ...visuraReplacements,
+                'percentuale cessione': `${percentualeCessione}% (${numeroInLettere(Number(percentualeCessione))}) `,
+                'percentuale revisione': `${percentualeRevisione}% (${numeroInLettere(Number(percentualeRevisione))}) `,
+                'percentuale consulenza': `${percentualeConsulenza}% (${numeroInLettere(Number(percentualeConsulenza))}) `,
+                'iban': iban
+            }
+
+            customReplacements.forEach(elem => {
+                replacements[elem.placeholder] = elem.replacement
+            })
+
+            console.log(replacements)
+
+            const username = localStorage.getItem('username')
+            if (!username) {
+                console.error('Username not found in localStorage')
+                return
+            }
+
+            // Create a new JSZip instance
+            const zip = new JSZip();
+
+            // Compile each contract and add to zip
+            for (const contract of contracts) {
+                formData = new FormData();
+                formData.append('contract', contract);
+                formData.append('replacements', JSON.stringify(replacements));
+                formData.append('username', username);
+
+                let response = await fetch('/api/contracts/compile/compile', {
+                    method: 'POST',
+                    body: formData
+                } as RequestInit);
+
+                // Check if the response is successful
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                // Parse the JSON response
+                const responseData = await response.json();
+
+                if (!responseData.data.contract || !responseData.data.contract.data) {
+                    throw new Error('Contract data not found in the response');
+                }
+
+                // Create a Uint8Array from the data array in the response
+                const uint8Array = new Uint8Array(responseData.data.contract.data);
+
+                // Add the file to the zip
+                zip.file(`compiled_${responseData.data.filename}`, uint8Array, {binary: true});
+            }
+
+            // Generate the zip file
+            const zipContent = await zip.generateAsync({type: 'blob'});
+
+            // Download the zip file
+            saveAs(zipContent, `contratti_compilati_${username}_${Date.now()}.zip`);
+
+        } catch (error) {
+            console.error('Error:', error)
+            alert('An error occurred while uploading the files.')
+        } finally {
+            setLoading(false)
+        }
+        /*} else {
             setLoading(false)
             if (!visura) {
                 alert('Please upload the Visura file before submitting.')
             } else if (!crediti) {
                 alert('Please upload the Crediti file before submitting.')
             }
-        }
+        }*/
     }
 
     return (
@@ -277,9 +355,11 @@ const CompileContractsPage = () => {
                         <form onSubmit={handleSubmit} className="space-y-6">
 
                             <div>
-                                <label htmlFor="visura" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Visura (PDF)
-                                </label>
+                                <LabelWithTooltip
+                                    htmlFor="visura"
+                                    label="Visura del cedente"
+                                    tooltipContent="Estae le informazioni relative dalla Visura Camerale come Nome società, Sede Legale, Rappresentante Legale, Pec e Partita IVA."
+                                />
                                 <Input
                                     id="visura"
                                     type="file"
@@ -288,64 +368,106 @@ const CompileContractsPage = () => {
                                 />
                             </div>
 
-                            <div>
-                                <label htmlFor="crediti" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Crediti (XLSX)
-                                </label>
-                                <Input
-                                    id="crediti"
-                                    type="file"
-                                    onChange={handleCreditiChange}
-                                    accept=".xlsx"
-                                />
-                            </div>
-
-                            <div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700">
-                                        Seleziona Intervallo Anni
-                                    </label>
-                                    <div className="flex space-x-4">
-                                        <div className="flex-1">
-                                            <label htmlFor="start-year" className="text-sm text-gray-500">
-                                                Anno Iniziale
-                                            </label>
-                                            <Select onValueChange={handleStartYearChange} value={startYear.toString()}>
-                                                <SelectTrigger id="start-year">
-                                                    <SelectValue placeholder="Seleziona anno iniziale"/>
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {yearOptions.map((year) => (
-                                                        <SelectItem key={year} value={year.toString()}>
-                                                            {year}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="flex-1">
-                                            <label htmlFor="end-year" className="text-sm text-gray-500">
-                                                Anno Finale
-                                            </label>
-                                            <Select onValueChange={handleEndYearChange} value={endYear.toString()}>
-                                                <SelectTrigger id="end-year">
-                                                    <SelectValue placeholder="Seleziona anno finale"/>
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {yearOptions.map((year) => (
-                                                        <SelectItem key={year} value={year.toString()}>
-                                                            {year}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                            { !creditiManuale && (
+                                <div>
+                                    <LabelWithTooltip
+                                        htmlFor="crediti"
+                                        label="Crediti del cedente"
+                                        tooltipContent="Estrae dal cassetto fiscale i crediti totali per ogni annualità, per poi calcolare Crediti scontati, Commissioni della Società di Revisione, Commissioni della Società di Consulenza, e il Netto cliente. Questi valori vengono calcolati sia anno per anno, per tutti gli anni nell'intervallo selezionato, sia sul totale di tutte le annualità selezionate"
+                                    />
+                                    <div className="flex items-center space-x-2">
+                                        <Input
+                                            id="crediti"
+                                            type="file"
+                                            onChange={handleCreditiChange}
+                                            accept=".xlsx"
+                                            className="flex-grow"
+                                        />
+                                        <Button onClick={() => setCreditiManuale(true)}>Inserisci manualmente</Button>
                                     </div>
-                                    <div className="text-sm text-gray-500">
-                                        Intervallo selezionato: da {startYear} a {endYear}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700">
+                                            Seleziona Intervallo Anni
+                                        </label>
+                                        <div className="flex space-x-4">
+                                            <div className="flex-1">
+                                                <label htmlFor="start-year" className="text-sm text-gray-500">
+                                                    Anno Iniziale
+                                                </label>
+                                                <Select onValueChange={handleStartYearChange}
+                                                        value={startYear.toString()}>
+                                                    <SelectTrigger id="start-year">
+                                                        <SelectValue placeholder="Seleziona anno iniziale"/>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {yearOptions.map((year) => (
+                                                            <SelectItem key={year} value={year.toString()}>
+                                                                {year}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="flex-1">
+                                                <label htmlFor="end-year" className="text-sm text-gray-500">
+                                                    Anno Finale
+                                                </label>
+                                                <Select onValueChange={handleEndYearChange} value={endYear.toString()}>
+                                                    <SelectTrigger id="end-year">
+                                                        <SelectValue placeholder="Seleziona anno finale"/>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {yearOptions.map((year) => (
+                                                            <SelectItem key={year} value={year.toString()}>
+                                                                {year}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-gray-500">
+                                            Intervallo selezionato: da {startYear} a {endYear}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
+
+                            { creditiManuale && (
+                                <div>
+                                    <div className="flex items-center justify-between w-full">
+                                        <LabelWithTooltip
+                                            htmlFor="crediti"
+                                            label="Crediti del cedente"
+                                            tooltipContent="Estrae dal cassetto fiscale i crediti totali per ogni annualità, per poi calcolare Crediti scontati, Commissioni della Società di Revisione, Commissioni della Società di Consulenza, e il Netto cliente. Questi valori vengono calcolati sia anno per anno, per tutti gli anni nell'intervallo selezionato, sia sul totale di tutte le annualità selezionate"
+                                        />
+                                        <Button onClick={() => setCreditiManuale(false)}>Inserisci file</Button>
+                                    </div>
+                                    <div className="mt-3">
+                                        {creditiManuali.map((replacement, index) => (
+                                            <div key={index} className="flex space-x-2 mb-2">
+                                                <Input
+                                                    placeholder="Anno"
+                                                    value={replacement.anno}
+                                                    type="number"
+                                                    step=".01"
+                                                    onChange={(e) => handleCreditiManualiChange(index, 'anno', e.target.value)}
+                                                />
+                                                <Input
+                                                    placeholder="Crediti"
+                                                    value={replacement.crediti}
+                                                    type="number"
+                                                    step=".01"
+                                                    onChange={(e) => handleCreditiManualiChange(index, 'crediti', e.target.value)}
+                                                />
+                                            </div>
+                                        ))}
+                                        <Button type="button" onClick={addCreditiManuali} className="mt-2">
+                                            <Plus className="mr-2 h-4 w-4"/> Aggiungi anno
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div>
                                 <label htmlFor="percentuale cessione"

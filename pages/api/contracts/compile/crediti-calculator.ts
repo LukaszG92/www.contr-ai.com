@@ -1,9 +1,6 @@
-import {Buffer} from "buffer";
-import xlsx from "xlsx";
-import fs from "fs/promises";
 import multiparty from "multiparty";
 import {NextApiRequest, NextApiResponse} from "next";
-import * as net from "net";
+
 
 function formatNumber(number: number) {
     // Convert the number to a fixed 2 decimal places string
@@ -98,24 +95,9 @@ function convertiNumeriGrandi(numero:number):string {
     return risultato.trim();
 }
 
-function extractCreditiInfo(file: string, percentualeCessione: number, percentualeRevisione: number, percentualeConsulenza: number, annoIniziale: number, annoFinale: number): {
+function extractCreditiInfo(sums: Map<string, number>, percentualeCessione: number, percentualeRevisione: number, percentualeConsulenza: number): {
     [p: string]: string
 } {
-    const workbook = xlsx.readFile(file);
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const sheetData = xlsx.utils.sheet_to_json(worksheet);
-
-    const sums = new Map<string, number>();
-    sheetData.forEach((row: any) => {
-        if (String(row['__EMPTY_12']).includes('cedibile a chiunque') && row['__EMPTY_4'] >= annoIniziale && row['__EMPTY_4'] <= annoFinale) {
-            const key = 'crediti' + row['__EMPTY_4'];
-            sums.set(key, (sums.get(key) || 0) + row['__EMPTY_5']);
-        }
-        if (String(row['__EMPTY']).includes('CREDITI DA PORTARE IN COMPENSAZIONE') && Number(row['__EMPTY'].slice(-4)) >= annoIniziale && Number(row['__EMPTY'].slice(-4)) <= annoFinale)  {
-            sums.set('crediti'+row['__EMPTY'].slice(-4), row['__EMPTY_6'])
-        }
-    });
 
     let calcoli: Map<string, string> = new Map<string, string>;
     let scontoTotale = 0
@@ -123,9 +105,9 @@ function extractCreditiInfo(file: string, percentualeCessione: number, percentua
     let commissioneConsulenza = 0
     let nettoTotale = 0
     sums.forEach( (value, key, map) => {
-        let year = key.slice(-4);
-
-        calcoli.set(key, numeroInParole(Number(value.toFixed(2))).toUpperCase())
+        let year = key;
+        console.log(value, key)
+        calcoli.set('crediti'+key, numeroInParole(Number(value.toFixed(2))).toUpperCase())
 
         let sconto = value * (percentualeCessione/100)
         calcoli.set('sconto'+year, numeroInParole(Number(sconto.toFixed(2))).toUpperCase())
@@ -181,13 +163,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
         const { files, fields} = await parseForm(req) as ParsedForm;
-        const creditiFile = files.crediti[0].path;
+        const crediti = JSON.parse(fields.crediti[0]);
+
+        let map = new Map<string, number>
+        for (const anno in crediti) {
+            console.log(anno, crediti[anno])
+            map.set(anno, Number(crediti[anno]))
+        }
+
         const percentualeCessione = Number(fields.percentuale_cessione[0]);
         const percentualeRevisione = Number(fields.percentuale_revisione[0]);
         const percentualeConsulenza = Number(fields.percentuale_consulenza[0]);
-        const annoIniziale = Number(fields.anno_iniziale[0]);
-        const annoFinale = Number(fields.anno_finale[0]);
-        const creditiReplacements = await extractCreditiInfo(creditiFile, percentualeCessione, percentualeRevisione, percentualeConsulenza, annoIniziale, annoFinale);
+        const creditiReplacements = extractCreditiInfo(map, percentualeCessione, percentualeRevisione, percentualeConsulenza);
 
         res.status(200).json({ message: 'Dati della visura ottenuti con successo', replacements: creditiReplacements });
     } catch (error) {
