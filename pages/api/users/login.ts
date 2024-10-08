@@ -52,6 +52,8 @@ export default async function handler(
 
     const { username, password } = req.body as User;
 
+    console.log(username, password)
+
     try {
         const filePath = path.join(process.cwd(), 'db', 'users.json');
         const fileContents = await fs.readFile(filePath, 'utf8');
