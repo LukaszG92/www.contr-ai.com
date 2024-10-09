@@ -71,6 +71,7 @@ export default async function handler(
                         }
                     });
                 }
+                console.log("Wrong password for "+username)
                 return res.status(403).json({
                     status: "failure",
                     message: "Password errata. Riprova."
@@ -78,6 +79,7 @@ export default async function handler(
             }
         }
 
+        console.log("Wrong username: "+username)
         return res.status(403).json({
             status: "failure",
             message: "Nome utente inesistente. Riprova.",
