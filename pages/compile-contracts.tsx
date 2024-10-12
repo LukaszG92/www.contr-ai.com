@@ -36,6 +36,8 @@ const CompileContractsPage = () => {
     const [customReplacements, setCustomReplacements] = useState<CustomReplacement[]>([{ placeholder: '', replacement: '' }])
     const [startYear, setStartYear] = useState<number>(currentYear)
     const [endYear, setEndYear] = useState<number>(currentYear)
+    const [selectedItem, setSelectedItem] = useState('');
+    const [addedItems, setAddedItems] = useState<string[]>([]);
 
     useEffect(() => {
         const getContracts = async () => {
@@ -231,6 +233,17 @@ const CompileContractsPage = () => {
         return arr.filter((element): element is T => element !== null);
     }
 
+    const trimFromFirstHyphen = (contractName: string): string => {
+        const hyphenIndex = contractName.indexOf('-');
+        const suffix = '.docx';
+
+        if (hyphenIndex === -1) {
+            return contractName.substring(0, contractName.length - suffix.length);
+        }
+
+        return contractName.substring(hyphenIndex + 1, contractName.length - suffix.length);
+    };
+
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         setLoading(true)
@@ -326,7 +339,7 @@ const CompileContractsPage = () => {
             const zip = new JSZip();
 
             // Compile each contract and add to zip
-            for (const contract of contracts) {
+            for (const contract of addedItems) {
                 formData = new FormData();
                 formData.append('contract', contract);
                 formData.append('replacements', JSON.stringify(replacements));
@@ -378,6 +391,16 @@ const CompileContractsPage = () => {
         }*/
     }
 
+    const handleItemClick = (item: string) => {
+        if (addedItems.includes(item)) {
+            // Remove the item if it's already in the list
+            setAddedItems(addedItems.filter(addedItem => addedItem !== item));
+        } else {
+            // Add the item if it's not in the list
+            setAddedItems([...addedItems, item]);
+        }
+    };
+
     return (
         <>
             <Topbar />
@@ -390,236 +413,267 @@ const CompileContractsPage = () => {
                         <form onSubmit={handleSubmit} className="space-y-6">
 
                             <div>
-                                <LabelWithTooltip
-                                    htmlFor="visura"
-                                    label="Visure Camerale"
-                                    tooltipContent="Estrae le informazioni relative dalla Visura Camerale come Nome società, Sede Legale, Rappresentante Legale, Pec e Partita IVA."
-                                />
-                                {visuras.map((visura, index) => (
-                                    <div key={index} className="flex items-center space-x-2 mb-2">
-                                        <Input
-                                            id={`visura-${index}`}
-                                            type="file"
-                                            onChange={(e) => handleVisuraChange(e, index)}
-                                            accept=".pdf"
-                                            className="flex-grow"
-                                        />
-                                        <Button
-                                            type="button"
-                                            onClick={() => removeVisura(index)}
-                                            variant="outline"
-                                            size="icon"
-                                            className="flex-shrink-0"
+                                <h3 className="text-lg font-semibold">Available Items</h3>
+                                <ul className="space-y-2">
+                                    {contracts.map((item, index) => (
+                                        <li
+                                            key={index}
+                                            onClick={() => handleItemClick(item)}
+                                            className={`cursor-pointer p-2 border rounded ${
+                                                addedItems.includes(item) ? 'bg-gray-200' : 'bg-white'
+                                            }`}
                                         >
-                                            <X className="h-4 w-4"/>
-                                        </Button>
-                                    </div>
-                                ))}
-                                <Button type="button" onClick={addVisuraInput} className="mt-2">
-                                    <Plus className="mr-2 h-4 w-4"/> Aggiungi altra Visura
-                                </Button>
+                                            {trimFromFirstHyphen(item)}
+                                        </li>
+                                    ))}
+                                </ul>
+                                <h3 className="text-lg font-semibold mt-4">Selected Items</h3>
+                                <ul className="space-y-2">
+                                    {addedItems.map((item, index) => (
+                                        <li
+                                            key={index}
+                                            className="p-2 border rounded bg-green-100"
+                                        >
+                                            {trimFromFirstHyphen(item)}
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
 
 
-                            {!creditiManuale && (
-                                <div>
+                            <div>
                                     <LabelWithTooltip
-                                        htmlFor="crediti"
-                                        label="Crediti del cedente"
-                                        tooltipContent="Estrae dal cassetto fiscale i crediti totali per ogni annualità, per poi calcolare Crediti scontati, Commissioni della Società di Revisione, Commissioni della Società di Consulenza, e il Netto cliente. Questi valori vengono calcolati sia anno per anno, per tutti gli anni nell'intervallo selezionato, sia sul totale di tutte le annualità selezionate"
+                                        htmlFor="visura"
+                                        label="Visure Camerale"
+                                        tooltipContent="Estrae le informazioni relative dalla Visura Camerale come Nome società, Sede Legale, Rappresentante Legale, Pec e Partita IVA."
                                     />
-                                    <div className="flex items-center space-x-2">
-                                        <Input
-                                            id="crediti"
-                                            type="file"
-                                            onChange={handleCreditiChange}
-                                            accept=".xlsx"
-                                            className="flex-grow"
-                                        />
-                                        <Button onClick={() => setCreditiManuale(true)}>Inserisci manualmente</Button>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-700">
-                                            Seleziona Intervallo Anni
-                                        </label>
-                                        <div className="flex space-x-4">
-                                            <div className="flex-1">
-                                                <label htmlFor="start-year" className="text-sm text-gray-500">
-                                                    Anno Iniziale
-                                                </label>
-                                                <Select onValueChange={handleStartYearChange}
-                                                        value={startYear.toString()}>
-                                                    <SelectTrigger id="start-year">
-                                                        <SelectValue placeholder="Seleziona anno iniziale"/>
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {yearOptions.map((year) => (
-                                                            <SelectItem key={year} value={year.toString()}>
-                                                                {year}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="flex-1">
-                                                <label htmlFor="end-year" className="text-sm text-gray-500">
-                                                    Anno Finale
-                                                </label>
-                                                <Select onValueChange={handleEndYearChange} value={endYear.toString()}>
-                                                    <SelectTrigger id="end-year">
-                                                        <SelectValue placeholder="Seleziona anno finale"/>
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {yearOptions.map((year) => (
-                                                            <SelectItem key={year} value={year.toString()}>
-                                                                {year}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
+                                    {visuras.map((visura, index) => (
+                                        <div key={index} className="flex items-center space-x-2 mb-2">
+                                            <Input
+                                                id={`visura-${index}`}
+                                                type="file"
+                                                onChange={(e) => handleVisuraChange(e, index)}
+                                                accept=".pdf"
+                                                className="flex-grow"
+                                            />
+                                            <Button
+                                                type="button"
+                                                onClick={() => removeVisura(index)}
+                                                variant="outline"
+                                                size="icon"
+                                                className="flex-shrink-0"
+                                            >
+                                                <X className="h-4 w-4"/>
+                                            </Button>
                                         </div>
-                                        <div className="text-sm text-gray-500">
-                                            Intervallo selezionato: da {startYear} a {endYear}
-                                        </div>
-                                    </div>
+                                    ))}
+                                    <Button type="button" onClick={addVisuraInput} className="mt-2">
+                                        <Plus className="mr-2 h-4 w-4"/> Aggiungi altra Visura
+                                    </Button>
                                 </div>
-                            )}
 
-                            {creditiManuale && (
-                                <div>
-                                    <div className="flex items-center justify-between w-full">
+
+                                {!creditiManuale && (
+                                    <div>
                                         <LabelWithTooltip
                                             htmlFor="crediti"
                                             label="Crediti del cedente"
                                             tooltipContent="Estrae dal cassetto fiscale i crediti totali per ogni annualità, per poi calcolare Crediti scontati, Commissioni della Società di Revisione, Commissioni della Società di Consulenza, e il Netto cliente. Questi valori vengono calcolati sia anno per anno, per tutti gli anni nell'intervallo selezionato, sia sul totale di tutte le annualità selezionate"
                                         />
-                                        <Button onClick={() => setCreditiManuale(false)}>Inserisci file</Button>
-                                    </div>
-                                    <div className="mt-3">
-                                        {creditiManuali.map((replacement, index) => (
-                                            <div key={index} className="flex space-x-2 mb-2">
-                                                <Input
-                                                    placeholder="Anno"
-                                                    value={replacement.anno}
-                                                    type="number"
-                                                    step=".01"
-                                                    onChange={(e) => handleCreditiManualiChange(index, 'anno', e.target.value)}
-                                                />
-                                                <Input
-                                                    placeholder="Crediti"
-                                                    value={replacement.crediti}
-                                                    type="number"
-                                                    step=".01"
-                                                    onChange={(e) => handleCreditiManualiChange(index, 'crediti', e.target.value)}
-                                                />
+                                        <div className="flex items-center space-x-2">
+                                            <Input
+                                                id="crediti"
+                                                type="file"
+                                                onChange={handleCreditiChange}
+                                                accept=".xlsx"
+                                                className="flex-grow"
+                                            />
+                                            <Button onClick={() => setCreditiManuale(true)}>Inserisci
+                                                manualmente</Button>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-700">
+                                                Seleziona Intervallo Anni
+                                            </label>
+                                            <div className="flex space-x-4">
+                                                <div className="flex-1">
+                                                    <label htmlFor="start-year" className="text-sm text-gray-500">
+                                                        Anno Iniziale
+                                                    </label>
+                                                    <Select onValueChange={handleStartYearChange}
+                                                            value={startYear.toString()}>
+                                                        <SelectTrigger id="start-year">
+                                                            <SelectValue placeholder="Seleziona anno iniziale"/>
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {yearOptions.map((year) => (
+                                                                <SelectItem key={year} value={year.toString()}>
+                                                                    {year}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <label htmlFor="end-year" className="text-sm text-gray-500">
+                                                        Anno Finale
+                                                    </label>
+                                                    <Select onValueChange={handleEndYearChange}
+                                                            value={endYear.toString()}>
+                                                        <SelectTrigger id="end-year">
+                                                            <SelectValue placeholder="Seleziona anno finale"/>
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {yearOptions.map((year) => (
+                                                                <SelectItem key={year} value={year.toString()}>
+                                                                    {year}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
                                             </div>
-                                        ))}
-                                        <Button type="button" onClick={addCreditiManuali} className="mt-2">
-                                            <Plus className="mr-2 h-4 w-4"/> Aggiungi anno
-                                        </Button>
+                                            <div className="text-sm text-gray-500">
+                                                Intervallo selezionato: da {startYear} a {endYear}
+                                            </div>
+                                        </div>
                                     </div>
+                                )}
+
+                                {creditiManuale && (
+                                    <div>
+                                        <div className="flex items-center justify-between w-full">
+                                            <LabelWithTooltip
+                                                htmlFor="crediti"
+                                                label="Crediti del cedente"
+                                                tooltipContent="Estrae dal cassetto fiscale i crediti totali per ogni annualità, per poi calcolare Crediti scontati, Commissioni della Società di Revisione, Commissioni della Società di Consulenza, e il Netto cliente. Questi valori vengono calcolati sia anno per anno, per tutti gli anni nell'intervallo selezionato, sia sul totale di tutte le annualità selezionate"
+                                            />
+                                            <Button onClick={() => setCreditiManuale(false)}>Inserisci file</Button>
+                                        </div>
+                                        <div className="mt-3">
+                                            {creditiManuali.map((replacement, index) => (
+                                                <div key={index} className="flex space-x-2 mb-2">
+                                                    <Input
+                                                        placeholder="Anno"
+                                                        value={replacement.anno}
+                                                        type="number"
+                                                        step=".01"
+                                                        onChange={(e) => handleCreditiManualiChange(index, 'anno', e.target.value)}
+                                                    />
+                                                    <Input
+                                                        placeholder="Crediti"
+                                                        value={replacement.crediti}
+                                                        type="number"
+                                                        step=".01"
+                                                        onChange={(e) => handleCreditiManualiChange(index, 'crediti', e.target.value)}
+                                                    />
+                                                </div>
+                                            ))}
+                                            <Button type="button" onClick={addCreditiManuali} className="mt-2">
+                                                <Plus className="mr-2 h-4 w-4"/> Aggiungi anno
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label htmlFor="percentuale cessione"
+                                           className="block text-sm font-medium text-gray-700 mb-1">
+                                        Percentuale Contratto di Cessione
+                                    </label>
+                                    <Input
+                                        id="percentuale cessione"
+                                        type="number"
+                                        value={percentualeCessione}
+                                        onChange={handlePercentualeCessioneChange}
+                                        min="0"
+                                        max="100"
+                                        placeholder="Inserisci una percentuale (0-100)"
+                                        step=".01"
+                                    />
                                 </div>
-                            )}
 
-                            <div>
-                                <label htmlFor="percentuale cessione"
-                                       className="block text-sm font-medium text-gray-700 mb-1">
-                                    Percentuale Contratto di Cessione
-                                </label>
-                                <Input
-                                    id="percentuale cessione"
-                                    type="number"
-                                    value={percentualeCessione}
-                                    onChange={handlePercentualeCessioneChange}
-                                    min="0"
-                                    max="100"
-                                    placeholder="Inserisci una percentuale (0-100)"
-                                    step=".01"
-                                />
-                            </div>
+                                <div>
+                                    <label htmlFor="percentuale"
+                                           className="block text-sm font-medium text-gray-700 mb-1">
+                                        Percentuale Società di Revisione
+                                    </label>
+                                    <Input
+                                        id="percentuale revisione"
+                                        type="number"
+                                        value={percentualeRevisione}
+                                        onChange={handlePercentualeRevisioneChange}
+                                        min="0"
+                                        max="100"
+                                        placeholder="Inserisci una percentuale (0-100)"
+                                        step=".01"
+                                    />
+                                </div>
 
-                            <div>
-                                <label htmlFor="percentuale"
-                                       className="block text-sm font-medium text-gray-700 mb-1">
-                                    Percentuale Società di Revisione
-                                </label>
-                                <Input
-                                    id="percentuale revisione"
-                                    type="number"
-                                    value={percentualeRevisione}
-                                    onChange={handlePercentualeRevisioneChange}
-                                    min="0"
-                                    max="100"
-                                    placeholder="Inserisci una percentuale (0-100)"
-                                    step=".01"
-                                />
-                            </div>
+                                <div>
+                                    <label htmlFor="percentuale"
+                                           className="block text-sm font-medium text-gray-700 mb-1">
+                                        Percentuale Società di Consulenza
+                                    </label>
+                                    <Input
+                                        id="percentuale"
+                                        type="number"
+                                        value={percentualeConsulenza}
+                                        onChange={handlePercentualeConsulenzaChange}
+                                        min="0"
+                                        max="100"
+                                        placeholder="Inserisci una percentuale (0-100)"
+                                        step=".01"
+                                    />
+                                </div>
 
-                            <div>
-                                <label htmlFor="percentuale"
-                                       className="block text-sm font-medium text-gray-700 mb-1">
-                                    Percentuale Società di Consulenza
-                                </label>
-                                <Input
-                                    id="percentuale"
-                                    type="number"
-                                    value={percentualeConsulenza}
-                                    onChange={handlePercentualeConsulenzaChange}
-                                    min="0"
-                                    max="100"
-                                    placeholder="Inserisci una percentuale (0-100)"
-                                    step=".01"
-                                />
-                            </div>
+                                <div>
+                                    <label htmlFor="percentuale"
+                                           className="block text-sm font-medium text-gray-700 mb-1">
+                                        IBAN Cedente
+                                    </label>
+                                    <Input
+                                        id="iban"
+                                        type="text"
+                                        value={iban}
+                                        onChange={handleIbanChange}
+                                        placeholder="Inserisci un IBAN"
+                                    />
+                                </div>
 
-                            <div>
-                                <label htmlFor="percentuale"
-                                       className="block text-sm font-medium text-gray-700 mb-1">
-                                    IBAN Cedente
-                                </label>
-                                <Input
-                                    id="iban"
-                                    type="text"
-                                    value={iban}
-                                    onChange={handleIbanChange}
-                                    placeholder="Inserisci un IBAN"
-                                />
-                            </div>
+                                <div>
+                                    <h2 className="text-lg font-semibold mb-2">Sostituzioni personalizzate</h2>
+                                    {customReplacements.map((replacement, index) => (
+                                        <div key={index} className="flex space-x-2 mb-2">
+                                            <Input
+                                                placeholder="Nome placeholder"
+                                                value={replacement.placeholder}
+                                                onChange={(e) => handleCustomReplacementChange(index, 'placeholder', e.target.value)}
+                                            />
+                                            <Input
+                                                placeholder="Contenuto da sostituire"
+                                                value={replacement.replacement}
+                                                onChange={(e) => handleCustomReplacementChange(index, 'replacement', e.target.value)}
+                                            />
+                                        </div>
+                                    ))}
+                                    <Button type="button" onClick={addCustomReplacement} className="mt-2">
+                                        <Plus className="mr-2 h-4 w-4"/> Aggiungi sostituzione
+                                    </Button>
+                                </div>
 
-                            <div>
-                                <h2 className="text-lg font-semibold mb-2">Sostituzioni personalizzate</h2>
-                                {customReplacements.map((replacement, index) => (
-                                    <div key={index} className="flex space-x-2 mb-2">
-                                        <Input
-                                            placeholder="Nome placeholder"
-                                            value={replacement.placeholder}
-                                            onChange={(e) => handleCustomReplacementChange(index, 'placeholder', e.target.value)}
-                                        />
-                                        <Input
-                                            placeholder="Contenuto da sostituire"
-                                            value={replacement.replacement}
-                                            onChange={(e) => handleCustomReplacementChange(index, 'replacement', e.target.value)}
-                                        />
-                                    </div>
-                                ))}
-                                <Button type="button" onClick={addCustomReplacement} className="mt-2">
-                                    <Plus className="mr-2 h-4 w-4"/> Aggiungi sostituzione
-                                </Button>
-                            </div>
-
-                            {loading ?
-                                <Button disabled>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Loading
-                                </Button> :
-                                <Button type="submit">Compila Contratto</Button>
-                            }
+                                {loading ?
+                                    <Button disabled>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Loading
+                                    </Button> :
+                                    <Button type="submit">Compila Contratto</Button>
+                                }
                         </form>
                     </CardContent>
                 </Card>
             </div>
         </>
-    )
+)
 }
 
 export default withAuth(CompileContractsPage)
