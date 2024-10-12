@@ -32,7 +32,7 @@ const CompileContractsPage = () => {
     const [percentualeRevisione, setPercentualeRevisione] = useState<string>('0')
     const [percentualeConsulenza, setPercentualeConsulenza] = useState<string>('0')
     const [iban, setIban] = useState<string>('')
-    const [creditiManuale, setCreditiManuale] = useState<boolean>(false)
+    const [creditiManuale, setCreditiManuale] = useState<boolean>(true)
     const [customReplacements, setCustomReplacements] = useState<CustomReplacement[]>([{ placeholder: '', replacement: '' }])
     const [startYear, setStartYear] = useState<number>(currentYear)
     const [endYear, setEndYear] = useState<number>(currentYear)
@@ -413,25 +413,24 @@ const CompileContractsPage = () => {
                         <form onSubmit={handleSubmit} className="space-y-6">
 
                             <div>
-                                <h3 className="text-lg font-semibold">Available Items</h3>
+                                <h3 className="text-lg font-semibold">Contratti Disponibili</h3>
                                 <ul className="space-y-2">
-                                    {contracts.map((item, index) => (
+                                    {contracts.filter((item) => !addedItems.includes(item)).map((item, index) => (
                                         <li
                                             key={index}
                                             onClick={() => handleItemClick(item)}
-                                            className={`cursor-pointer p-2 border rounded ${
-                                                addedItems.includes(item) ? 'bg-gray-200' : 'bg-white'
-                                            }`}
+                                            className="cursor-pointer p-2 border rounded bg-white"
                                         >
                                             {trimFromFirstHyphen(item)}
                                         </li>
                                     ))}
                                 </ul>
-                                <h3 className="text-lg font-semibold mt-4">Selected Items</h3>
+                                <h3 className="text-lg font-semibold mt-4">Contratti da Compilare</h3>
                                 <ul className="space-y-2">
                                     {addedItems.map((item, index) => (
                                         <li
                                             key={index}
+                                            onClick={() => handleItemClick(item)}
                                             className="p-2 border rounded bg-green-100"
                                         >
                                             {trimFromFirstHyphen(item)}
@@ -473,7 +472,7 @@ const CompileContractsPage = () => {
                                 </div>
 
 
-                                {!creditiManuale && (
+                                {/*{!creditiManuale && (
                                     <div>
                                         <LabelWithTooltip
                                             htmlFor="crediti"
@@ -539,6 +538,7 @@ const CompileContractsPage = () => {
                                         </div>
                                     </div>
                                 )}
+                                */}
 
                                 {creditiManuale && (
                                     <div>
@@ -548,7 +548,7 @@ const CompileContractsPage = () => {
                                                 label="Crediti del cedente"
                                                 tooltipContent="Estrae dal cassetto fiscale i crediti totali per ogni annualità, per poi calcolare Crediti scontati, Commissioni della Società di Revisione, Commissioni della Società di Consulenza, e il Netto cliente. Questi valori vengono calcolati sia anno per anno, per tutti gli anni nell'intervallo selezionato, sia sul totale di tutte le annualità selezionate"
                                             />
-                                            <Button onClick={() => setCreditiManuale(false)}>Inserisci file</Button>
+                                            {/*<Button onClick={() => setCreditiManuale(false)}>Inserisci file</Button>*/}
                                         </div>
                                         <div className="mt-3">
                                             {creditiManuali.map((replacement, index) => (
@@ -593,6 +593,7 @@ const CompileContractsPage = () => {
                                     />
                                 </div>
 
+                            {/*
                                 <div>
                                     <label htmlFor="percentuale"
                                            className="block text-sm font-medium text-gray-700 mb-1">
@@ -609,6 +610,7 @@ const CompileContractsPage = () => {
                                         step=".01"
                                     />
                                 </div>
+                            */}
 
                                 <div>
                                     <label htmlFor="percentuale"
