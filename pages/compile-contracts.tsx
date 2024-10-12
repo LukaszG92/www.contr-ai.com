@@ -392,7 +392,7 @@ const CompileContractsPage = () => {
                             <div>
                                 <LabelWithTooltip
                                     htmlFor="visura"
-                                    label="Visure del cedente"
+                                    label="Visure Camerale"
                                     tooltipContent="Estrae le informazioni relative dalla Visura Camerale come Nome società, Sede Legale, Rappresentante Legale, Pec e Partita IVA."
                                 />
                                 {visuras.map((visura, index) => (
