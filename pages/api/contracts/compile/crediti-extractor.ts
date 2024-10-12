@@ -118,6 +118,7 @@ function extractCreditiInfo(file: string, percentualeCessione: number, percentua
     });
 
     let calcoli: Map<string, string> = new Map<string, string>;
+    let creditiTotale = 0
     let scontoTotale = 0
     let commissioneRevisione = 0
     let commissioneConsulenza = 0
@@ -126,6 +127,7 @@ function extractCreditiInfo(file: string, percentualeCessione: number, percentua
         let year = key.slice(-4);
 
         calcoli.set(key, numeroInParole(Number(value.toFixed(2))).toUpperCase())
+        creditiTotale += value
 
         let sconto = value * (percentualeCessione/100)
         calcoli.set('sconto'+year, numeroInParole(Number(sconto.toFixed(2))).toUpperCase())
@@ -143,6 +145,7 @@ function extractCreditiInfo(file: string, percentualeCessione: number, percentua
         nettoTotale += netto
         calcoli.set('netto'+year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())
 
+        calcoli.set('crediti', numeroInParole(Number(creditiTotale.toFixed(2).toUpperCase())))
         calcoli.set('sconto', numeroInParole(Number(scontoTotale.toFixed(2))).toUpperCase())
         calcoli.set('commissione revisione', numeroInParole(Number(commissioneRevisione.toFixed(2))).toUpperCase())
         calcoli.set('commissione consulenza', numeroInParole(Number(commissioneConsulenza.toFixed(2))).toUpperCase())

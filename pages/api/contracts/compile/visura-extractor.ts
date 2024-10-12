@@ -45,10 +45,26 @@ function getPartitaIva(text: string){
     return cleanText(text.slice(start, end));
 }
 
+function getFirstCapitalSubstring(str : string) {
+    let result = '';
+    let isCapitalSequence = false;
+
+    for (let char of str) {
+        if ((char >= 'A' && char <= 'Z') || char == ' ' ) {
+            result += char;
+            isCapitalSequence = true;
+        } else if (isCapitalSequence) {
+            break;
+        }
+    }
+
+    return result;
+}
+
 function getAmministratore(text: string) {
-    const start = text.indexOf('Amministratore Unico') + 'Amministratore Unico'.length;
-    const end = text.indexOf('Rappresentante');
-    return cleanText(text.slice(start, end));
+    const start = text.indexOf('Data ultimo protocollo') + 'Data ultimo protocollo'.length + 15;
+    const end = start + Number.MAX_SAFE_INTEGER;
+    return cleanText(getFirstCapitalSubstring(text.slice(start, end)));
 }
 
 async function extractVisuraInfo(file: string): Promise<Record<string, string>> {

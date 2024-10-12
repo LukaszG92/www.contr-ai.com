@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
-import {Loader2, Plus, Info, HelpCircle} from 'lucide-react'
+import {Loader2, Plus, Info, HelpCircle, X} from 'lucide-react'
 import Topbar from "@/components/Topbar"
 import { saveAs } from 'file-saver'
 import {withAuth} from "@/components/withAuth";
@@ -25,7 +25,7 @@ const CompileContractsPage = () => {
 
     const [loading, setLoading] = useState<boolean>(false)
     const [contracts, setContracts] = useState<string[]>([])
-    const [visura, setVisura] = useState<File | null>(null)
+    const [visuras, setVisuras] = useState<(File | null)[]>([null])
     const [crediti, setCrediti] = useState<File | null>(null)
     const [creditiManuali, setCreditiManuali] = useState<CreditiManuali[]>([{ anno: '', crediti: '' }])
     const [percentualeCessione, setPercentualeCessione] = useState<string>('0')
@@ -60,13 +60,31 @@ const CompileContractsPage = () => {
         getContracts()
     }, [])
 
-    const handleVisuraChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleVisuraChange = (e: ChangeEvent<HTMLInputElement>, index: number) => {
         const file = e.target.files?.[0];
         if (file && file.type === 'application/pdf') {
-            setVisura(file);
+            const newVisuras = [...visuras];
+            newVisuras[index] = file;
+            setVisuras(newVisuras);
         } else {
             alert('Per favore, seleziona un file PDF per la Visura.');
             e.target.value = '';
+        }
+    };
+
+    const addVisuraInput = () => {
+        setVisuras([...visuras, null]);
+    };
+
+    const removeVisura = (index: number) => {
+        if (visuras?.length > 1) {
+            if (visuras) {
+                const newVisuras = visuras.filter((_, i) => i !== index);
+                setVisuras(newVisuras);
+            }
+        } else {
+            // If it's the last input, just clear it instead of removing
+            setVisuras([null]);
         }
     };
 
@@ -209,23 +227,40 @@ const CompileContractsPage = () => {
         </div>
     )
 
+    function removeNullElements<T>(arr: (T | null)[]): T[] {
+        return arr.filter((element): element is T => element !== null);
+    }
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         setLoading(true)
         try {
             let formData = new FormData()
-            let visuraReplacements = {}
-            if(visura) {
-                formData.append('visura', visura)
+            let visuraReplacements: Record<string, string> = {}
+            let fileCounter = 1
+            console.log(visuras)
+            for (const visura of removeNullElements(visuras)) {
+                console.log(visura)
+                if (visura) {
+                    formData.append('visura', visura)
 
-                let response = await fetch('/api/contracts/compile/visura-extractor', {
-                    method: 'POST',
-                    body: formData
-                }as RequestInit)
+                    let response = await fetch('/api/contracts/compile/visura-extractor', {
+                        method: 'POST',
+                        body: formData
+                    } as RequestInit)
 
-                let responseJson = await response.json()
-                visuraReplacements = responseJson.replacements
+                    let responseJson = await response.json()
+
+                    if(visuras?.length == 1) {
+                        visuraReplacements = responseJson.replacements
+                        break
+                    } else {
+                        for (let key in responseJson.replacements) {
+                            visuraReplacements[key + fileCounter] = responseJson.replacements[key]
+                        }
+                    }
+                    fileCounter++
+                }
             }
 
             let creditiReplacements = {}
@@ -357,18 +392,36 @@ const CompileContractsPage = () => {
                             <div>
                                 <LabelWithTooltip
                                     htmlFor="visura"
-                                    label="Visura del cedente"
-                                    tooltipContent="Estae le informazioni relative dalla Visura Camerale come Nome società, Sede Legale, Rappresentante Legale, Pec e Partita IVA."
+                                    label="Visure del cedente"
+                                    tooltipContent="Estrae le informazioni relative dalla Visura Camerale come Nome società, Sede Legale, Rappresentante Legale, Pec e Partita IVA."
                                 />
-                                <Input
-                                    id="visura"
-                                    type="file"
-                                    onChange={handleVisuraChange}
-                                    accept=".pdf"
-                                />
+                                {visuras.map((visura, index) => (
+                                    <div key={index} className="flex items-center space-x-2 mb-2">
+                                        <Input
+                                            id={`visura-${index}`}
+                                            type="file"
+                                            onChange={(e) => handleVisuraChange(e, index)}
+                                            accept=".pdf"
+                                            className="flex-grow"
+                                        />
+                                        <Button
+                                            type="button"
+                                            onClick={() => removeVisura(index)}
+                                            variant="outline"
+                                            size="icon"
+                                            className="flex-shrink-0"
+                                        >
+                                            <X className="h-4 w-4"/>
+                                        </Button>
+                                    </div>
+                                ))}
+                                <Button type="button" onClick={addVisuraInput} className="mt-2">
+                                    <Plus className="mr-2 h-4 w-4"/> Aggiungi altra Visura
+                                </Button>
                             </div>
 
-                            { !creditiManuale && (
+
+                            {!creditiManuale && (
                                 <div>
                                     <LabelWithTooltip
                                         htmlFor="crediti"
@@ -433,7 +486,7 @@ const CompileContractsPage = () => {
                                 </div>
                             )}
 
-                            { creditiManuale && (
+                            {creditiManuale && (
                                 <div>
                                     <div className="flex items-center justify-between w-full">
                                         <LabelWithTooltip
@@ -566,7 +619,7 @@ const CompileContractsPage = () => {
                 </Card>
             </div>
         </>
-)
+    )
 }
 
 export default withAuth(CompileContractsPage)
