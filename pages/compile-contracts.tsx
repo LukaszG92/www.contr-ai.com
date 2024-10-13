@@ -30,7 +30,7 @@ const CompileContractsPage = () => {
     const [creditiManuali, setCreditiManuali] = useState<CreditiManuali[]>([{ anno: '', crediti: '' }])
     const [percentualeCessione, setPercentualeCessione] = useState<string>('0')
     const [percentualeRevisione, setPercentualeRevisione] = useState<string>('0')
-    const [percentualeConsulenza, setPercentualeConsulenza] = useState<string>('0')
+    const [percentualiConsulenza, setPercentualiConsulenza] = useState<number[]>([0]);
     const [iban, setIban] = useState<string>('')
     const [creditiManuale, setCreditiManuale] = useState<boolean>(true)
     const [customReplacements, setCustomReplacements] = useState<CustomReplacement[]>([{ placeholder: '', replacement: '' }])
@@ -85,7 +85,6 @@ const CompileContractsPage = () => {
                 setVisuras(newVisuras);
             }
         } else {
-            // If it's the last input, just clear it instead of removing
             setVisuras([null]);
         }
     };
@@ -113,18 +112,18 @@ const CompileContractsPage = () => {
         setIban(value);
     };
 
-    const handlePercentualeRevisioneChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        if (value === '' || (Number(value) >= 0 && Number(value) <= 100)) {
-            setPercentualeRevisione(value);
-        }
+    const addPercentualeConsulenza = () => {
+        setPercentualiConsulenza([...percentualiConsulenza, 0]);
     };
 
-    const handlePercentualeConsulenzaChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        if (value === '' || (Number(value) >= 0 && Number(value) <= 100)) {
-            setPercentualeConsulenza(value);
-        }
+    const handlePercentualeConsulenzaChange = (index: number, value: number) => {
+        const updatedPercentuali = [...percentualiConsulenza];
+        updatedPercentuali[index] = value;
+        setPercentualiConsulenza(updatedPercentuali);
+    };
+
+    const removePercentualeConsulenza = (index: number) => {
+        setPercentualiConsulenza(percentualiConsulenza.filter((_, i) => i !== index));
     };
 
     const handleCreditiManualiChange = (index: number, field: keyof CreditiManuali, value: string) => {
@@ -177,26 +176,38 @@ const CompileContractsPage = () => {
 
     function numeroInLettere(n: number): string {
         const numeri: { [key: number]: string } = {
-            1: "uno", 2: "due", 3: "tre", 4: "quattro", 5: "cinque", 6: "sei", 7: "sette", 8: "otto", 9: "nove", 10: "dieci",
+            0: "zero", 1: "uno", 2: "due", 3: "tre", 4: "quattro", 5: "cinque", 6: "sei", 7: "sette", 8: "otto", 9: "nove", 10: "dieci",
             11: "undici", 12: "dodici", 13: "tredici", 14: "quattordici", 15: "quindici", 16: "sedici", 17: "diciassette",
             18: "diciotto", 19: "diciannove", 20: "venti", 30: "trenta", 40: "quaranta", 50: "cinquanta", 60: "sessanta",
             70: "settanta", 80: "ottanta", 90: "novanta", 100: "cento"
         };
 
-        if (n in numeri) {
-            return numeri[n];
+        // Convert integer part to words
+        function convertIntegerPart(n: number): string {
+            if (n in numeri) {
+                return numeri[n];
+            }
+
+            let decina = Math.floor(n / 10) * 10;
+            let unita = n % 10;
+
+            if (unita === 1 || unita === 8) {
+                return numeri[decina].slice(0, -1) + numeri[unita];
+            } else {
+                return numeri[decina] + numeri[unita];
+            }
         }
 
-        let decina = Math.floor(n / 10) * 10;
-        let unita = n % 10;
+        // Split the number into integer and decimal parts
+        const [integerPart, decimalPart] = n.toString().split('.' ).map(Number);
+        let result = convertIntegerPart(integerPart);
 
-
-        if (unita === 1 || unita === 8) {
-            // Se il numero termina in 1 o 8, si elimina la vocale finale della decina (es: ventuno, ventotto)
-            return numeri[decina].slice(0, -1) + numeri[unita];
-        } else {
-            return numeri[decina] + numeri[unita];
+        // If there is a decimal part, convert it to words as well
+        if (decimalPart !== undefined) {
+            result += ` virgola ${convertIntegerPart(decimalPart)}`;
         }
+
+        return result;
     }
 
     interface LabelWithTooltipProps {
@@ -282,7 +293,8 @@ const CompileContractsPage = () => {
                 formData.append('crediti', crediti)
                 formData.append('percentuale_cessione', `${percentualeCessione}`)
                 formData.append('percentuale_revisione', `${percentualeRevisione}`)
-                formData.append('percentuale_consulenza', `${percentualeConsulenza}`)
+                console.log(percentualiConsulenza)
+                formData.append('percentuali_consulenza', `${percentualiConsulenza}`)
                 formData.append('anno_iniziale', String(startYear))
                 formData.append('anno_finale', String(endYear))
 
@@ -303,7 +315,7 @@ const CompileContractsPage = () => {
                 formData.append('crediti', JSON.stringify(crediti))
                 formData.append('percentuale_cessione', `${percentualeCessione}`)
                 formData.append('percentuale_revisione', `${percentualeRevisione}`)
-                formData.append('percentuale_consulenza', `${percentualeConsulenza}`)
+                formData.append('percentuali_consulenza', `${percentualiConsulenza}`)
 
                 let response = await fetch('/api/contracts/compile/crediti-calculator', {
                     method: 'POST',
@@ -319,8 +331,18 @@ const CompileContractsPage = () => {
                 ...visuraReplacements,
                 'percentuale cessione': `${percentualeCessione}% (${numeroInLettere(Number(percentualeCessione))}) `,
                 'percentuale revisione': `${percentualeRevisione}% (${numeroInLettere(Number(percentualeRevisione))}) `,
-                'percentuale consulenza': `${percentualeConsulenza}% (${numeroInLettere(Number(percentualeConsulenza))}) `,
+                //'percentuale consulenza': `${percentualeConsulenza}% (${numeroInLettere(Number(percentualeConsulenza))}) `,
                 'iban': iban
+            }
+
+            if(percentualiConsulenza.length == 1) {
+                replacements['percentuale consulenza'] = `${percentualiConsulenza[0]}% (${numeroInLettere(Number(percentualiConsulenza[0]))})`
+            } else {
+                let counter = 1
+                percentualiConsulenza.forEach(value => {
+                    replacements['percentuale consulenza' + counter] = `${value}% (${numeroInLettere(Number(value))})`
+                    counter++
+                })
             }
 
             customReplacements.forEach(elem => {
@@ -393,10 +415,8 @@ const CompileContractsPage = () => {
 
     const handleItemClick = (item: string) => {
         if (addedItems.includes(item)) {
-            // Remove the item if it's already in the list
             setAddedItems(addedItems.filter(addedItem => addedItem !== item));
         } else {
-            // Add the item if it's not in the list
             setAddedItems([...addedItems, item]);
         }
     };
@@ -441,38 +461,38 @@ const CompileContractsPage = () => {
 
 
                             <div>
-                                    <LabelWithTooltip
-                                        htmlFor="visura"
-                                        label="Visure Camerale"
-                                        tooltipContent="Estrae le informazioni relative dalla Visura Camerale come Nome società, Sede Legale, Rappresentante Legale, Pec e Partita IVA."
-                                    />
-                                    {visuras.map((visura, index) => (
-                                        <div key={index} className="flex items-center space-x-2 mb-2">
-                                            <Input
-                                                id={`visura-${index}`}
-                                                type="file"
-                                                onChange={(e) => handleVisuraChange(e, index)}
-                                                accept=".pdf"
-                                                className="flex-grow"
-                                            />
-                                            <Button
-                                                type="button"
-                                                onClick={() => removeVisura(index)}
-                                                variant="outline"
-                                                size="icon"
-                                                className="flex-shrink-0"
-                                            >
-                                                <X className="h-4 w-4"/>
-                                            </Button>
-                                        </div>
-                                    ))}
-                                    <Button type="button" onClick={addVisuraInput} className="mt-2">
-                                        <Plus className="mr-2 h-4 w-4"/> Aggiungi altra Visura
-                                    </Button>
-                                </div>
+                                <LabelWithTooltip
+                                    htmlFor="visura"
+                                    label="Visure Camerale"
+                                    tooltipContent="Estrae le informazioni relative dalla Visura Camerale come Nome società, Sede Legale, Rappresentante Legale, Pec e Partita IVA."
+                                />
+                                {visuras.map((visura, index) => (
+                                    <div key={index} className="flex items-center space-x-2 mb-2">
+                                        <Input
+                                            id={`visura-${index}`}
+                                            type="file"
+                                            onChange={(e) => handleVisuraChange(e, index)}
+                                            accept=".pdf"
+                                            className="flex-grow"
+                                        />
+                                        <Button
+                                            type="button"
+                                            onClick={() => removeVisura(index)}
+                                            variant="outline"
+                                            size="icon"
+                                            className="flex-shrink-0"
+                                        >
+                                            <X className="h-4 w-4"/>
+                                        </Button>
+                                    </div>
+                                ))}
+                                <Button type="button" onClick={addVisuraInput} className="mt-2">
+                                    <Plus className="mr-2 h-4 w-4"/> Aggiungi altra Visura
+                                </Button>
+                            </div>
 
 
-                                {/*{!creditiManuale && (
+                            {/*{!creditiManuale && (
                                     <div>
                                         <LabelWithTooltip
                                             htmlFor="crediti"
@@ -540,58 +560,58 @@ const CompileContractsPage = () => {
                                 )}
                                 */}
 
-                                {creditiManuale && (
-                                    <div>
-                                        <div className="flex items-center justify-between w-full">
-                                            <LabelWithTooltip
-                                                htmlFor="crediti"
-                                                label="Crediti del cedente"
-                                                tooltipContent="Estrae dal cassetto fiscale i crediti totali per ogni annualità, per poi calcolare Crediti scontati, Commissioni della Società di Revisione, Commissioni della Società di Consulenza, e il Netto cliente. Questi valori vengono calcolati sia anno per anno, per tutti gli anni nell'intervallo selezionato, sia sul totale di tutte le annualità selezionate"
-                                            />
-                                            {/*<Button onClick={() => setCreditiManuale(false)}>Inserisci file</Button>*/}
-                                        </div>
-                                        <div className="mt-3">
-                                            {creditiManuali.map((replacement, index) => (
-                                                <div key={index} className="flex space-x-2 mb-2">
-                                                    <Input
-                                                        placeholder="Anno"
-                                                        value={replacement.anno}
-                                                        type="number"
-                                                        step=".01"
-                                                        onChange={(e) => handleCreditiManualiChange(index, 'anno', e.target.value)}
-                                                    />
-                                                    <Input
-                                                        placeholder="Crediti"
-                                                        value={replacement.crediti}
-                                                        type="number"
-                                                        step=".01"
-                                                        onChange={(e) => handleCreditiManualiChange(index, 'crediti', e.target.value)}
-                                                    />
-                                                </div>
-                                            ))}
-                                            <Button type="button" onClick={addCreditiManuali} className="mt-2">
-                                                <Plus className="mr-2 h-4 w-4"/> Aggiungi anno
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
-
+                            {creditiManuale && (
                                 <div>
-                                    <label htmlFor="percentuale cessione"
-                                           className="block text-sm font-medium text-gray-700 mb-1">
-                                        Percentuale Contratto di Cessione
-                                    </label>
-                                    <Input
-                                        id="percentuale cessione"
-                                        type="number"
-                                        value={percentualeCessione}
-                                        onChange={handlePercentualeCessioneChange}
-                                        min="0"
-                                        max="100"
-                                        placeholder="Inserisci una percentuale (0-100)"
-                                        step=".01"
-                                    />
+                                    <div className="flex items-center justify-between w-full">
+                                        <LabelWithTooltip
+                                            htmlFor="crediti"
+                                            label="Crediti del cedente"
+                                            tooltipContent="Estrae dal cassetto fiscale i crediti totali per ogni annualità, per poi calcolare Crediti scontati, Commissioni della Società di Revisione, Commissioni della Società di Consulenza, e il Netto cliente. Questi valori vengono calcolati sia anno per anno, per tutti gli anni nell'intervallo selezionato, sia sul totale di tutte le annualità selezionate"
+                                        />
+                                        {/*<Button onClick={() => setCreditiManuale(false)}>Inserisci file</Button>*/}
+                                    </div>
+                                    <div className="mt-3">
+                                        {creditiManuali.map((replacement, index) => (
+                                            <div key={index} className="flex space-x-2 mb-2">
+                                                <Input
+                                                    placeholder="Anno"
+                                                    value={replacement.anno}
+                                                    type="number"
+                                                    step=".01"
+                                                    onChange={(e) => handleCreditiManualiChange(index, 'anno', e.target.value)}
+                                                />
+                                                <Input
+                                                    placeholder="Crediti"
+                                                    value={replacement.crediti}
+                                                    type="number"
+                                                    step=".01"
+                                                    onChange={(e) => handleCreditiManualiChange(index, 'crediti', e.target.value)}
+                                                />
+                                            </div>
+                                        ))}
+                                        <Button type="button" onClick={addCreditiManuali} className="mt-2">
+                                            <Plus className="mr-2 h-4 w-4"/> Aggiungi anno
+                                        </Button>
+                                    </div>
                                 </div>
+                            )}
+
+                            <div>
+                                <label htmlFor="percentuale cessione"
+                                       className="block text-sm font-medium text-gray-700 mb-1">
+                                    Percentuale Contratto di Cessione
+                                </label>
+                                <Input
+                                    id="percentuale cessione"
+                                    type="number"
+                                    value={percentualeCessione}
+                                    onChange={handlePercentualeCessioneChange}
+                                    min="0"
+                                    max="100"
+                                    placeholder="Inserisci una percentuale (0-100)"
+                                    step=".01"
+                                />
+                            </div>
 
                             {/*
                                 <div>
@@ -612,70 +632,97 @@ const CompileContractsPage = () => {
                                 </div>
                             */}
 
-                                <div>
-                                    <label htmlFor="percentuale"
-                                           className="block text-sm font-medium text-gray-700 mb-1">
-                                        Percentuale Società di Consulenza
-                                    </label>
-                                    <Input
-                                        id="percentuale"
-                                        type="number"
-                                        value={percentualeConsulenza}
-                                        onChange={handlePercentualeConsulenzaChange}
-                                        min="0"
-                                        max="100"
-                                        placeholder="Inserisci una percentuale (0-100)"
-                                        step=".01"
-                                    />
-                                </div>
+                            <div>
+                                <h3 className="text-lg font-semibold mt-4">Percentuali Consulenza</h3>
+                                {percentualiConsulenza.map((percentuale, index) => (
+                                    <div key={index} className="flex items-center space-x-2 mb-2">
+                                        <Input
+                                            type="number"
+                                            value={percentuale}
+                                            onChange={(e) =>
+                                                handlePercentualeConsulenzaChange(index, parseFloat(e.target.value))
+                                            }
+                                            placeholder="Inserisci percentuale"
+                                            min="0"
+                                            max="100"
+                                            step=".01"
+                                            className="flex-grow"
+                                        />
+                                        <Button
+                                            type="button"
+                                            onClick={() => removePercentualeConsulenza(index)}
+                                        >
+                                            Rimuovi
+                                        </Button>
+                                    </div>
+                                ))}
+                                <Button type="button" onClick={addPercentualeConsulenza} className="mt-2">
+                                    Aggiungi Percentuale Consulenza
+                                </Button>
+                            </div>
 
-                                <div>
-                                    <label htmlFor="percentuale"
-                                           className="block text-sm font-medium text-gray-700 mb-1">
-                                        IBAN Cedente
-                                    </label>
-                                    <Input
-                                        id="iban"
-                                        type="text"
-                                        value={iban}
-                                        onChange={handleIbanChange}
-                                        placeholder="Inserisci un IBAN"
-                                    />
-                                </div>
 
-                                <div>
-                                    <h2 className="text-lg font-semibold mb-2">Sostituzioni personalizzate</h2>
-                                    {customReplacements.map((replacement, index) => (
-                                        <div key={index} className="flex space-x-2 mb-2">
-                                            <Input
-                                                placeholder="Nome placeholder"
-                                                value={replacement.placeholder}
-                                                onChange={(e) => handleCustomReplacementChange(index, 'placeholder', e.target.value)}
-                                            />
-                                            <Input
-                                                placeholder="Contenuto da sostituire"
-                                                value={replacement.replacement}
-                                                onChange={(e) => handleCustomReplacementChange(index, 'replacement', e.target.value)}
-                                            />
-                                        </div>
-                                    ))}
-                                    <Button type="button" onClick={addCustomReplacement} className="mt-2">
-                                        <Plus className="mr-2 h-4 w-4"/> Aggiungi sostituzione
-                                    </Button>
-                                </div>
+                            <div>
+                                <label htmlFor="percentuale"
+                                       className="block text-sm font-medium text-gray-700 mb-1">
+                                    IBAN Cedente
+                                </label>
+                                <Input
+                                    id="iban"
+                                    type="text"
+                                    value={iban}
+                                    onChange={handleIbanChange}
+                                    placeholder="Inserisci un IBAN"
+                                />
+                            </div>
 
-                                {loading ?
-                                    <Button disabled>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Loading
-                                    </Button> :
-                                    <Button type="submit">Compila Contratto</Button>
-                                }
+                            <div>
+                                <label htmlFor="percentuale"
+                                       className="block text-sm font-medium text-gray-700 mb-1">
+                                    Codici Tributo
+                                </label>
+                                <Input
+                                    id="iban"
+                                    type="text"
+                                    value={iban}
+                                    onChange={handleIbanChange}
+                                    placeholder="Inserisci i codici tributo"
+                                />
+                            </div>
+
+                            <div>
+                                <h2 className="text-lg font-semibold mb-2">Sostituzioni personalizzate</h2>
+                                {customReplacements.map((replacement, index) => (
+                                    <div key={index} className="flex space-x-2 mb-2">
+                                        <Input
+                                            placeholder="Nome placeholder"
+                                            value={replacement.placeholder}
+                                            onChange={(e) => handleCustomReplacementChange(index, 'placeholder', e.target.value)}
+                                        />
+                                        <Input
+                                            placeholder="Contenuto da sostituire"
+                                            value={replacement.replacement}
+                                            onChange={(e) => handleCustomReplacementChange(index, 'replacement', e.target.value)}
+                                        />
+                                    </div>
+                                ))}
+                                <Button type="button" onClick={addCustomReplacement} className="mt-2">
+                                    <Plus className="mr-2 h-4 w-4"/> Aggiungi sostituzione
+                                </Button>
+                            </div>
+
+                            {loading ?
+                                <Button disabled>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Loading
+                                </Button> :
+                                <Button type="submit">Compila Contratto</Button>
+                            }
                         </form>
                     </CardContent>
                 </Card>
             </div>
         </>
-)
+    )
 }
 
 export default withAuth(CompileContractsPage)

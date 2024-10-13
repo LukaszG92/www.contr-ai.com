@@ -1,5 +1,6 @@
 import multiparty from "multiparty";
 import {NextApiRequest, NextApiResponse} from "next";
+import {list} from "postcss";
 
 
 function formatNumber(number: number) {
@@ -95,16 +96,19 @@ function convertiNumeriGrandi(numero:number):string {
     return risultato.trim();
 }
 
-function extractCreditiInfo(sums: Map<string, number>, percentualeCessione: number, percentualeRevisione: number, percentualeConsulenza: number): {
+function extractCreditiInfo(sums: Map<string, number>, percentualeCessione: number, percentualiConsulenza: number[]): {
     [p: string]: string
 } {
 
     let calcoli: Map<string, string> = new Map<string, string>;
     let creditiTotale = 0
     let scontoTotale = 0
-    let commissioneRevisione = 0
     let commissioneConsulenza = 0
     let nettoTotale = 0
+    let commissioniTotaliConsulenti:number[] = []
+    percentualiConsulenza.forEach((value, index, array) => {
+        commissioniTotaliConsulenti[index] = 0
+    })
     sums.forEach( (value, key, map) => {
         let year = key;
         console.log(value, key)
@@ -114,22 +118,47 @@ function extractCreditiInfo(sums: Map<string, number>, percentualeCessione: numb
         let sconto = value * (percentualeCessione/100)
         calcoli.set('sconto'+year, numeroInParole(Number(sconto.toFixed(2))).toUpperCase())
         scontoTotale += sconto
+        if(percentualiConsulenza.length == 1) {
+            let commissioneC = value * (percentualiConsulenza[0]/100) * 1.22
+            calcoli.set('commissione consulenza'+year, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
+            commissioneConsulenza += commissioneC
 
-        let commissioneR = value * (percentualeRevisione/100) * 1.22
-        calcoli.set('commissione revisione'+year, numeroInParole(Number(commissioneR.toFixed(2))).toUpperCase())
-        commissioneRevisione += commissioneR
+            let netto = sconto - commissioneC
+            nettoTotale += netto
+            calcoli.set('netto'+year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())
+        } else {
+            let counter = 1
+            let commissioniCAnnue = 0
+            percentualiConsulenza.forEach((percentuale, index, array) => {
+                let commissioneC = value * (percentuale / 100) * 1.22
+                calcoli.set('commissione consulenza' + year + ` ${counter}`, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
+                commissioniCAnnue += commissioneC
+                commissioneConsulenza += commissioneC
+                commissioniTotaliConsulenti[index] += commissioneC
+                console.log(commissioniTotaliConsulenti)
+                counter++
 
-        let commissioneC = value * (percentualeConsulenza/100) * 1.22
-        calcoli.set('commissione consulenza'+year, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
-        commissioneConsulenza += commissioneC
+                let netto = sconto - commissioneC
+                nettoTotale += netto
+                calcoli.set('netto' + year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())
+                calcoli.set('commissioni consulenti'+year, numeroInParole(Number(commissioniCAnnue.toFixed(2))).toUpperCase())
+            })
+            /*let commissioneC = value * (percentualeConsulenza / 100) * 1.22
+            calcoli.set('commissione consulenza' + year, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
+            commissioneConsulenza += commissioneC
 
-        let netto = sconto - commissioneR - commissioneC
-        nettoTotale += netto
-        calcoli.set('netto'+year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())
+            let netto = sconto - commissioneC
+            nettoTotale += netto
+            calcoli.set('netto' + year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())*/
+        }
+
+        commissioniTotaliConsulenti.forEach((value, index, array) => {
+            calcoli.set('commissione consulente'+(index+1), numeroInParole(Number(value.toFixed(2))).toUpperCase())
+        })
 
         calcoli.set('crediti', numeroInParole(Number(creditiTotale.toFixed(2).toUpperCase())))
         calcoli.set('sconto', numeroInParole(Number(scontoTotale.toFixed(2))).toUpperCase())
-        calcoli.set('commissione revisione', numeroInParole(Number(commissioneRevisione.toFixed(2))).toUpperCase())
+        //calcoli.set('commissione revisione', numeroInParole(Number(commissioneRevisione.toFixed(2))).toUpperCase())
         calcoli.set('commissione consulenza', numeroInParole(Number(commissioneConsulenza.toFixed(2))).toUpperCase())
         calcoli.set('netto', numeroInParole(Number(nettoTotale.toFixed(2))).toUpperCase())
     })
@@ -170,14 +199,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         let map = new Map<string, number>
         for (const anno in crediti) {
-            console.log(anno, crediti[anno])
             map.set(anno, Number(crediti[anno]))
         }
 
         const percentualeCessione = Number(fields.percentuale_cessione[0]);
-        const percentualeRevisione = Number(fields.percentuale_revisione[0]);
-        const percentualeConsulenza = Number(fields.percentuale_consulenza[0]);
-        const creditiReplacements = extractCreditiInfo(map, percentualeCessione, percentualeRevisione, percentualeConsulenza);
+        const percentualeConsulenza = fields.percentuali_consulenza[0];
+        let percentualiConsulenza = percentualeConsulenza.split(',')
+
+        const creditiReplacements = extractCreditiInfo(map, percentualeCessione, percentualiConsulenza);
 
         res.status(200).json({ message: 'Dati della visura ottenuti con successo', replacements: creditiReplacements });
     } catch (error) {
