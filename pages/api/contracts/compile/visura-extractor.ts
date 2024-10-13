@@ -29,12 +29,14 @@ function getSocieta(text: string) {
 
 function getSedeLegale(text: string) {
     const start = text.indexOf('Indirizzo Sede legale') + 'Indirizzo Sede legale'.length;
-    const end = text.indexOf('Domicilio digitale/PEC');
-    return cleanText(text.slice(start, end));
+    const end = text.indexOf('PEC');
+    let value = cleanText(text.slice(start, end));
+    value = removeLastWord(value)
+    return value;
 }
 
 function getPec(text: string) {
-    const start = text.indexOf('Domicilio digitale/PEC') + 'Domicilio digitale/PEC'.length;
+    const start = text.indexOf('PEC') + 'Domicilio digitale/PEC'.length;
     const end = text.indexOf('Numero');
     return cleanText(text.slice(start, end));
 }
