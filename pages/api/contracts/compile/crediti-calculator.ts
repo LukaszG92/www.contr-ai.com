@@ -118,39 +118,30 @@ function extractCreditiInfo(sums: Map<string, number>, percentualeCessione: numb
         let sconto = value * (percentualeCessione/100)
         calcoli.set('sconto'+year, numeroInParole(Number(sconto.toFixed(2))).toUpperCase())
         scontoTotale += sconto
-        if(percentualiConsulenza.length == 1) {
-            let commissioneC = value * (percentualiConsulenza[0]/100) * 1.22
-            calcoli.set('commissione consulenza'+year, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
+
+        let counter = 1
+        let commissioniCAnnue = 0
+        percentualiConsulenza.forEach((percentuale, index, array) => {
+            let commissioneC = value * (percentuale / 100) * 1.22
+            calcoli.set('commissione consulenza' + year + ` ${counter}`, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
+            commissioniCAnnue += commissioneC
             commissioneConsulenza += commissioneC
+            commissioniTotaliConsulenti[index] += commissioneC
+            console.log(commissioniTotaliConsulenti)
+            counter++
 
             let netto = sconto - commissioneC
             nettoTotale += netto
-            calcoli.set('netto'+year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())
-        } else {
-            let counter = 1
-            let commissioniCAnnue = 0
-            percentualiConsulenza.forEach((percentuale, index, array) => {
-                let commissioneC = value * (percentuale / 100) * 1.22
-                calcoli.set('commissione consulenza' + year + ` ${counter}`, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
-                commissioniCAnnue += commissioneC
-                commissioneConsulenza += commissioneC
-                commissioniTotaliConsulenti[index] += commissioneC
-                console.log(commissioniTotaliConsulenti)
-                counter++
+            calcoli.set('netto' + year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())
+            calcoli.set('commissioni consulenti'+year, numeroInParole(Number(commissioniCAnnue.toFixed(2))).toUpperCase())
+        })
+        /*let commissioneC = value * (percentualeConsulenza / 100) * 1.22
+        calcoli.set('commissione consulenza' + year, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
+        commissioneConsulenza += commissioneC
 
-                let netto = sconto - commissioneC
-                nettoTotale += netto
-                calcoli.set('netto' + year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())
-                calcoli.set('commissioni consulenti'+year, numeroInParole(Number(commissioniCAnnue.toFixed(2))).toUpperCase())
-            })
-            /*let commissioneC = value * (percentualeConsulenza / 100) * 1.22
-            calcoli.set('commissione consulenza' + year, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
-            commissioneConsulenza += commissioneC
-
-            let netto = sconto - commissioneC
-            nettoTotale += netto
-            calcoli.set('netto' + year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())*/
-        }
+        let netto = sconto - commissioneC
+        nettoTotale += netto
+        calcoli.set('netto' + year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())*/
 
         commissioniTotaliConsulenti.forEach((value, index, array) => {
             calcoli.set('commissione consulente'+(index+1), numeroInParole(Number(value.toFixed(2))).toUpperCase())

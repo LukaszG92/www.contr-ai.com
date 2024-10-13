@@ -281,14 +281,10 @@ const CompileContractsPage = () => {
 
                     let responseJson = await response.json()
 
-                    if(visuras?.length == 1) {
-                        visuraReplacements = responseJson.replacements
-                        break
-                    } else {
-                        for (let key in responseJson.replacements) {
-                            visuraReplacements[key + fileCounter] = responseJson.replacements[key]
-                        }
+                    for (let key in responseJson.replacements) {
+                        visuraReplacements[key + fileCounter] = responseJson.replacements[key]
                     }
+
                     fileCounter++
                 }
             }
@@ -299,7 +295,6 @@ const CompileContractsPage = () => {
                 formData.append('crediti', crediti)
                 formData.append('percentuale_cessione', `${percentualeCessione}`)
                 formData.append('percentuale_revisione', `${percentualeRevisione}`)
-                console.log(percentualiConsulenza)
                 formData.append('percentuali_consulenza', `${percentualiConsulenza}`)
                 formData.append('anno_iniziale', String(startYear))
                 formData.append('anno_finale', String(endYear))
