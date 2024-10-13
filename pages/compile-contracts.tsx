@@ -32,6 +32,7 @@ const CompileContractsPage = () => {
     const [percentualeRevisione, setPercentualeRevisione] = useState<string>('0')
     const [percentualiConsulenza, setPercentualiConsulenza] = useState<number[]>([0]);
     const [iban, setIban] = useState<string>('')
+    const [codiciTributo, setCodiciTributo] = useState<string>('')
     const [creditiManuale, setCreditiManuale] = useState<boolean>(true)
     const [customReplacements, setCustomReplacements] = useState<CustomReplacement[]>([{ placeholder: '', replacement: '' }])
     const [startYear, setStartYear] = useState<number>(currentYear)
@@ -110,6 +111,11 @@ const CompileContractsPage = () => {
     const handleIbanChange = (e: ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
         setIban(value);
+    };
+
+    const handleTributiChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        setCodiciTributo(value);
     };
 
     const addPercentualeConsulenza = () => {
@@ -332,7 +338,8 @@ const CompileContractsPage = () => {
                 'percentuale cessione': `${percentualeCessione}% (${numeroInLettere(Number(percentualeCessione))}) `,
                 'percentuale revisione': `${percentualeRevisione}% (${numeroInLettere(Number(percentualeRevisione))}) `,
                 //'percentuale consulenza': `${percentualeConsulenza}% (${numeroInLettere(Number(percentualeConsulenza))}) `,
-                'iban': iban
+                'iban': iban,
+                'codici tributo': codiciTributo
             }
 
             if(percentualiConsulenza.length == 1) {
