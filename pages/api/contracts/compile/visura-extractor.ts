@@ -16,7 +16,7 @@ function removeLastWord(str: string) {
     return str.replace(/\s+\S+$/, '');
 }
 
-function removeTrailingNonCapsWords(str) {
+function removeTrailingNonCapsWords(str:string) {
     // Split the string into words
     let words = str.split(' ');
 
@@ -29,10 +29,10 @@ function removeTrailingNonCapsWords(str) {
     return words.join(' ');
 }
 
-function extractEmail(text) {
+function extractEmail(text:string) {
     const pattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
     const match = text.match(pattern);
-    return match ? match[0] : null;
+    return match ? match[0] : "";
 }
 
 function cleanText(text: string): string {
