@@ -270,13 +270,14 @@ const CompileContractsPage = () => {
         e.preventDefault()
         setLoading(true)
         try {
-            let formData = new FormData()
+            let formData
             let visuraReplacements: Record<string, string> = {}
             let fileCounter = 1
             console.log(visuras)
             for (const visura of removeNullElements(visuras)) {
                 console.log(visura)
                 if (visura) {
+                    formData = new FormData()
                     formData.append('visura', visura)
 
                     let response = await fetch('/api/contracts/compile/visura-extractor', {
@@ -285,7 +286,7 @@ const CompileContractsPage = () => {
                     } as RequestInit)
 
                     let responseJson = await response.json()
-
+                    console.log(responseJson.replacements)
                     for (let key in responseJson.replacements) {
                         visuraReplacements[key + fileCounter] = responseJson.replacements[key]
                     }

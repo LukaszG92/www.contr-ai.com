@@ -147,7 +147,7 @@ function extractCreditiInfo(sums: Map<string, number>, percentualeCessione: numb
             calcoli.set('commissione consulente'+(index+1), numeroInParole(Number(value.toFixed(2))).toUpperCase())
         })
 
-        calcoli.set('crediti', numeroInParole(Number(creditiTotale.toFixed(2).toUpperCase())))
+        calcoli.set('crediti', numeroInParole(Number(creditiTotale.toFixed(2))).toUpperCase())
         calcoli.set('sconto', numeroInParole(Number(scontoTotale.toFixed(2))).toUpperCase())
         //calcoli.set('commissione revisione', numeroInParole(Number(commissioneRevisione.toFixed(2))).toUpperCase())
         calcoli.set('commissione consulenza', numeroInParole(Number(commissioneConsulenza.toFixed(2))).toUpperCase())
