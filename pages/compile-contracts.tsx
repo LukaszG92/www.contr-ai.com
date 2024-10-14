@@ -692,8 +692,8 @@ const CompileContractsPage = () => {
                                 <Input
                                     id="iban"
                                     type="text"
-                                    value={iban}
-                                    onChange={handleIbanChange}
+                                    value={codiciTributo}
+                                    onChange={handleTributiChange}
                                     placeholder="Inserisci i codici tributo"
                                 />
                             </div>
