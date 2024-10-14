@@ -113,25 +113,24 @@ function extractCreditiInfo(sums: Map<string, number>, percentualeCessione: numb
         let year = key;
         console.log(value, key)
         calcoli.set('crediti'+key, numeroInParole(Number(value.toFixed(2))).toUpperCase())
-        creditiTotale += value
+        if(!year.includes('tributo')) creditiTotale += value
 
         let sconto = value * (percentualeCessione/100)
         calcoli.set('sconto'+year, numeroInParole(Number(sconto.toFixed(2))).toUpperCase())
-        scontoTotale += sconto
+        if(!year.includes('tributo'))scontoTotale += sconto
 
         let counter = 1
         let commissioniCAnnue = 0
         percentualiConsulenza.forEach((percentuale, index, array) => {
             let commissioneC = value * (percentuale / 100) * 1.22
             calcoli.set('commissione consulenza' + year + ` ${counter}`, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
-            commissioniCAnnue += commissioneC
-            commissioneConsulenza += commissioneC
-            commissioniTotaliConsulenti[index] += commissioneC
-            console.log(commissioniTotaliConsulenti)
+            if(!year.includes('tributo')) commissioniCAnnue += commissioneC
+            if(!year.includes('tributo')) commissioneConsulenza += commissioneC
+            if(!year.includes('tributo')) commissioniTotaliConsulenti[index] += commissioneC
             counter++
 
             let netto = sconto - commissioneC
-            nettoTotale += netto
+            if(!year.includes('tributo')) nettoTotale += netto
             calcoli.set('netto' + year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())
             calcoli.set('commissioni consulenti'+year, numeroInParole(Number(commissioniCAnnue.toFixed(2))).toUpperCase())
         })

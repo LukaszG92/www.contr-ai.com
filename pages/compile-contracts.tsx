@@ -16,8 +16,9 @@ interface CustomReplacement {
 }
 
 interface CreditiManuali {
-    anno: string
-    crediti: string
+    anno: string;
+    crediti: string;
+    codiciTributo: { codice: string; importo: string }[];
 }
 
 const CompileContractsPage = () => {
@@ -27,7 +28,7 @@ const CompileContractsPage = () => {
     const [contracts, setContracts] = useState<string[]>([])
     const [visuras, setVisuras] = useState<(File | null)[]>([null])
     const [crediti, setCrediti] = useState<File | null>(null)
-    const [creditiManuali, setCreditiManuali] = useState<CreditiManuali[]>([{ anno: '', crediti: '' }])
+    const [creditiManuali, setCreditiManuali] = useState<CreditiManuali[]>([{ anno: '', crediti: '', codiciTributo: [] }]);
     const [percentualeCessione, setPercentualeCessione] = useState<string>('0')
     const [percentualeRevisione, setPercentualeRevisione] = useState<string>('0')
     const [percentualiConsulenza, setPercentualiConsulenza] = useState<number[]>([0]);
@@ -134,7 +135,39 @@ const CompileContractsPage = () => {
 
     const handleCreditiManualiChange = (index: number, field: keyof CreditiManuali, value: string) => {
         const updatedCrediti = [...creditiManuali];
-        updatedCrediti[index][field] = value;
+        if (field === 'anno' || field === 'crediti') {
+            updatedCrediti[index][field] = value;
+        }
+        setCreditiManuali(updatedCrediti);
+    };
+
+    const addCreditiManuali = () => {
+        setCreditiManuali([...creditiManuali, { anno: '', crediti: '', codiciTributo: [] }]);
+    };
+
+    const divideCodiciTributo = (index: number) => {
+        const updatedCrediti = [...creditiManuali];
+        if (!updatedCrediti[index].codiciTributo.length) {
+            updatedCrediti[index].codiciTributo.push({ codice: '', importo: updatedCrediti[index].crediti });
+        }
+        setCreditiManuali(updatedCrediti);
+    };
+
+    const addCodiceTributo = (creditoIndex: number) => {
+        const updatedCrediti = [...creditiManuali];
+        updatedCrediti[creditoIndex].codiciTributo.push({ codice: '', importo: '' });
+        setCreditiManuali(updatedCrediti);
+    };
+
+    const handleCodiceTributoChange = (creditoIndex: number, tributoIndex: number, field: 'codice' | 'importo', value: string) => {
+        const updatedCrediti = [...creditiManuali];
+        updatedCrediti[creditoIndex].codiciTributo[tributoIndex][field] = value;
+        setCreditiManuali(updatedCrediti);
+    };
+
+    const removeCodiceTributo = (creditoIndex: number, tributoIndex: number) => {
+        const updatedCrediti = [...creditiManuali];
+        updatedCrediti[creditoIndex].codiciTributo.splice(tributoIndex, 1);
         setCreditiManuali(updatedCrediti);
     };
 
@@ -171,14 +204,14 @@ const CompileContractsPage = () => {
         }
     };
 
-    const addCreditiManuali = () => {
+    /*const addCreditiManuali = () => {
         if (creditiManuali[creditiManuali.length - 1].anno &&
             creditiManuali[creditiManuali.length - 1].crediti) {
-            setCreditiManuali([...creditiManuali, { anno: '', crediti: '' }]);
+            setCreditiManuali([...creditiManuali, { anno: '', crediti: '' ,  codiciTributo: [] }]);
         } else {
             alert('Per favore, compila entrambi i campi dell\'ultima sostituzione prima di aggiungerne una nuova.');
         }
-    };
+    };*/
 
     function numeroInLettere(n: number): string {
         const numeri: { [key: number]: string } = {
@@ -317,6 +350,9 @@ const CompileContractsPage = () => {
                 let crediti: Record<string, number> = {}
                 creditiManuali.forEach(elem => {
                     crediti[elem.anno] = Number(elem.crediti)
+                    elem.codiciTributo.forEach((e, index) => {
+                        crediti[elem.anno+'tributo'+(index+1)] = Number(e.importo)
+                    })
                 })
 
                 formData.append('crediti', JSON.stringify(crediti))
@@ -342,6 +378,16 @@ const CompileContractsPage = () => {
                 'iban': iban,
                 'codici tributo': codiciTributo
             }
+
+            let counterTributi = 0
+            creditiManuali.forEach(elem => {
+                elem.codiciTributo.forEach((e) => {
+                    if(e.codice !== "") {
+                        replacements['tributo' + (counterTributi + 1)] = e.codice
+                        counterTributi++
+                    }
+                })
+            })
 
             if(percentualiConsulenza.length == 1) {
                 replacements['percentuale consulenza'] = `${percentualiConsulenza[0]}% (${numeroInLettere(Number(percentualiConsulenza[0]))})`
@@ -570,37 +616,57 @@ const CompileContractsPage = () => {
 
                             {creditiManuale && (
                                 <div>
-                                    <div className="flex items-center justify-between w-full">
-                                        <LabelWithTooltip
-                                            htmlFor="crediti"
-                                            label="Crediti del cedente"
-                                            tooltipContent="Estrae dal cassetto fiscale i crediti totali per ogni annualità, per poi calcolare Crediti scontati, Commissioni della Società di Revisione, Commissioni della Società di Consulenza, e il Netto cliente. Questi valori vengono calcolati sia anno per anno, per tutti gli anni nell'intervallo selezionato, sia sul totale di tutte le annualità selezionate"
-                                        />
-                                        {/*<Button onClick={() => setCreditiManuale(false)}>Inserisci file</Button>*/}
-                                    </div>
-                                    <div className="mt-3">
-                                        {creditiManuali.map((replacement, index) => (
-                                            <div key={index} className="flex space-x-2 mb-2">
+                                    <h3 className="text-lg font-semibold mt-4">Crediti del cedente</h3>
+                                    {creditiManuali.map((credito, creditoIndex) => (
+                                        <div key={creditoIndex} className="mb-4 p-4 border rounded">
+                                            <div className="flex space-x-2 mb-2">
                                                 <Input
                                                     placeholder="Anno"
-                                                    value={replacement.anno}
+                                                    value={credito.anno}
                                                     type="number"
-                                                    step=".01"
-                                                    onChange={(e) => handleCreditiManualiChange(index, 'anno', e.target.value)}
+                                                    onChange={(e) => handleCreditiManualiChange(creditoIndex, 'anno', e.target.value)}
                                                 />
                                                 <Input
                                                     placeholder="Crediti"
-                                                    value={replacement.crediti}
+                                                    value={credito.crediti}
                                                     type="number"
                                                     step=".01"
-                                                    onChange={(e) => handleCreditiManualiChange(index, 'crediti', e.target.value)}
+                                                    onChange={(e) => handleCreditiManualiChange(creditoIndex, 'crediti', e.target.value)}
                                                 />
+                                                <Button type="button" onClick={() => divideCodiciTributo(creditoIndex)}>
+                                                    Dividi in codici tributo
+                                                </Button>
                                             </div>
-                                        ))}
-                                        <Button type="button" onClick={addCreditiManuali} className="mt-2">
-                                            <Plus className="mr-2 h-4 w-4"/> Aggiungi anno
-                                        </Button>
-                                    </div>
+                                            {credito.codiciTributo.map((tributo, tributoIndex) => (
+                                                <div key={tributoIndex} className="flex space-x-2 mt-2">
+                                                    <Input
+                                                        placeholder="Codice Tributo"
+                                                        value={tributo.codice}
+                                                        onChange={(e) => handleCodiceTributoChange(creditoIndex, tributoIndex, 'codice', e.target.value)}
+                                                    />
+                                                    <Input
+                                                        placeholder="Importo"
+                                                        value={tributo.importo}
+                                                        type="number"
+                                                        step=".01"
+                                                        onChange={(e) => handleCodiceTributoChange(creditoIndex, tributoIndex, 'importo', e.target.value)}
+                                                    />
+                                                    <Button type="button"
+                                                        onClick={() => removeCodiceTributo(creditoIndex, tributoIndex)}>
+                                                        <X className="h-4 w-4"/>
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                            {credito.codiciTributo.length > 0 && (
+                                                <Button type="button" onClick={() => addCodiceTributo(creditoIndex)} className="mt-2">
+                                                    <Plus className="mr-2 h-4 w-4" /> Aggiungi Codice Tributo
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <Button type="button" onClick={addCreditiManuali} className="mt-2">
+                                        <Plus className="mr-2 h-4 w-4"/> Aggiungi Anno
+                                    </Button>
                                 </div>
                             )}
 
