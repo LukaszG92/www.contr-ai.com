@@ -7,11 +7,6 @@ import pdf from 'pdf-parse';
 import {NextApiRequest, NextApiResponse} from "next";
 
 
-function getCurrentDate(): string {
-    const date = new Date();
-    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
-}
-
 function removeLastWord(str: string) {
     return str.replace(/\s+\S+$/, '');
 }
@@ -218,7 +213,7 @@ async function extractVisuraInfo(file: string): Promise<Record<string, string>> 
         const text = data.text
 
 
-        const replacements: Record<string, string> = { 'data': getCurrentDate() };
+        const replacements: Record<string, string> = {};
         replacements['società'] = getSocieta(text)
         replacements['sede legale'] = getSedeLegale(text)
         replacements['pec'] = getPec(text)

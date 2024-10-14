@@ -261,6 +261,11 @@ const CompileContractsPage = () => {
         return contractName.substring(hyphenIndex + 1, contractName.length - suffix.length);
     };
 
+    function getCurrentDate(): string {
+        const date = new Date();
+        return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+    }
+
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         setLoading(true)
@@ -332,7 +337,7 @@ const CompileContractsPage = () => {
                 ...visuraReplacements,
                 'percentuale cessione': `${percentualeCessione}% (${numeroInLettere(Number(percentualeCessione))}) `,
                 'percentuale revisione': `${percentualeRevisione}% (${numeroInLettere(Number(percentualeRevisione))}) `,
-                //'percentuale consulenza': `${percentualeConsulenza}% (${numeroInLettere(Number(percentualeConsulenza))}) `,
+                'data' : getCurrentDate(),
                 'iban': iban,
                 'codici tributo': codiciTributo
             }
