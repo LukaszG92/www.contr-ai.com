@@ -121,6 +121,7 @@ function extractCreditiInfo(sums: Map<string, number>, percentualeCessione: numb
 
         let counter = 1
         let commissioniCAnnue = 0
+        let netto = sconto
         percentualiConsulenza.forEach((percentuale, index, array) => {
             let commissioneC = value * (percentuale / 100) * 1.22
             calcoli.set('commissione consulenza' + year + ` ${counter}`, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
@@ -129,11 +130,13 @@ function extractCreditiInfo(sums: Map<string, number>, percentualeCessione: numb
             if(!year.includes('tributo')) commissioniTotaliConsulenti[index] += commissioneC
             counter++
 
-            let netto = sconto - commissioneC
-            if(!year.includes('tributo')) nettoTotale += netto
-            calcoli.set('netto' + year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())
-            calcoli.set('commissioni consulenti'+year, numeroInParole(Number(commissioniCAnnue.toFixed(2))).toUpperCase())
         })
+
+        netto -= commissioniCAnnue
+        console.log(`Netto:${netto}, Anno: ${year}, Netto Totale: ${nettoTotale}`)
+        if(!year.includes('tributo')) nettoTotale += netto
+        calcoli.set('netto' + year, numeroInParole(Number(netto.toFixed(2))).toUpperCase())
+        calcoli.set('commissioni consulenti'+year, numeroInParole(Number(commissioniCAnnue.toFixed(2))).toUpperCase())
         /*let commissioneC = value * (percentualeConsulenza / 100) * 1.22
         calcoli.set('commissione consulenza' + year, numeroInParole(Number(commissioneC.toFixed(2))).toUpperCase())
         commissioneConsulenza += commissioneC
@@ -150,6 +153,7 @@ function extractCreditiInfo(sums: Map<string, number>, percentualeCessione: numb
         calcoli.set('sconto', numeroInParole(Number(scontoTotale.toFixed(2))).toUpperCase())
         //calcoli.set('commissione revisione', numeroInParole(Number(commissioneRevisione.toFixed(2))).toUpperCase())
         calcoli.set('commissione consulenza', numeroInParole(Number(commissioneConsulenza.toFixed(2))).toUpperCase())
+        console.log(nettoTotale)
         calcoli.set('netto', numeroInParole(Number(nettoTotale.toFixed(2))).toUpperCase())
     })
 
