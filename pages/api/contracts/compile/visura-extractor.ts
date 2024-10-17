@@ -230,12 +230,10 @@ async function extractVisuraInfo(file: string): Promise<Record<string, string>> 
 }
 
 export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '20mb',
+    api: {
+        bodyParser: false,
     },
-  },
-}
+};
 
 interface ParsedForm {
     files: Record<string, any>;
